@@ -101,6 +101,19 @@ tr.dt{display:none}tr.dt.open{display:table-row}tr.dt td{background:#080e16;text
 .pst{margin-left:auto;text-align:right}
 .pick{cursor:pointer;transition:.15s}.pick:hover{border-color:var(--ice);box-shadow:0 0 18px #7fd6ff30}
 .phead a{color:var(--ice)}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+@media(max-width:640px){.two{grid-template-columns:1fr}}
+.cr{display:grid;grid-template-columns:90px 1fr 90px;gap:12px;align-items:center;padding:9px 14px;border-top:1px solid var(--line)}
+.cr:first-child{border-top:0}
+.cv{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--mut)}
+.cv.r{text-align:right}.cv.w{color:#fff;font-weight:800;text-shadow:0 0 14px #7fd6ffaa}
+.cl{font-size:11px;letter-spacing:.14em;color:var(--mut);text-transform:uppercase;text-align:center;margin-bottom:5px}
+.cb{height:6px;border-radius:4px;background:#17314a;overflow:hidden}
+.cb i{display:block;height:100%;background:linear-gradient(90deg,#2b78a8,var(--ice2));box-shadow:0 0 10px #7fd6ff80}
+.hr{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 14px;border-top:1px solid var(--line);font-size:13px}
+.hr:first-child{border-top:0}
+.hr .nm{flex:1}
 </style>
 </head>
 <body>
@@ -114,6 +127,7 @@ tr.dt{display:none}tr.dt.open{display:table-row}tr.dt td{background:#080e16;text
 <button class="tab on" id="nv0" onclick="view(0)">Мета героев</button>
 <button class="tab" id="nv1" onclick="view(1)">Поиск матча</button>
 <button class="tab" id="nv2" onclick="view(2)">Игрок</button>
+<button class="tab" id="nv3" onclick="view(3)">Сравнение</button>
 </div>
 <div id="metaView">
 <div class="label">Рейтинг</div>
@@ -150,6 +164,15 @@ tr.dt{display:none}tr.dt.open{display:table-row}tr.dt td{background:#080e16;text
 </div>
 <div id="pres"><div class="msg">Подойдёт числовой Steam ID (32 или 64 бита), ссылка Dotabuff / OpenDota / Steam или ник. Профиль должен открывать историю матчей.</div></div>
 </div>
+<div id="cmpView" style="display:none">
+<div class="label">Два игрока: ID, ссылка или ник</div>
+<div class="mbar">
+<input id="ca" placeholder="Игрок 1" autocomplete="off">
+<input id="cb" placeholder="Игрок 2" autocomplete="off">
+<button class="btn" onclick="compare()">Сравнить</button>
+</div>
+<div id="cres"><div class="msg">Статистика считается по всей публичной истории матчей. Если вводите ник, берётся лучшее совпадение: для точности используйте числовой ID.</div></div>
+</div>
 
 </div>
 
@@ -181,7 +204,7 @@ fetch("data.json",{cache:"no-cache"}).then(r=>r.json()).then(j=>{DB=j;
  $("note").textContent=j.demo?"⚠ Демонстрационные данные. После первого запуска обновления здесь появится реальная статистика.":"Данные: STRATZ · обновлено "+j.updated+" · тренд — изменение винрейта к прошлому обновлению";
  render()}).catch(()=>{$("list").innerHTML='<div class="empty">Не удалось загрузить data.json. Откройте сайт через хостинг (GitHub Pages), а не как файл.</div>'});
 
-function view(i){["metaView","matchView","playerView"].forEach((v,j)=>$(v).style.display=i===j?"":"none");[0,1,2].forEach(j=>$("nv"+j).className="tab"+(i===j?" on":""))}
+function view(i){["metaView","matchView","playerView","cmpView"].forEach((v,j)=>$(v).style.display=i===j?"":"none");[0,1,2,3].forEach(j=>$("nv"+j).className="tab"+(i===j?" on":""))}
 const API="https://api.opendota.com/api/";
 const MODES={1:"All Pick",2:"Captains Mode",3:"Random Draft",4:"Single Draft",5:"All Random",16:"Captains Draft",18:"Ability Draft",22:"All Pick",23:"Turbo"};
 let HEROES=null;
@@ -292,8 +315,8 @@ async function loadPlayer(id){
     const rr=(rm||[]).map(x=>{const n=H[x.hero_id]||("Hero "+x.hero_id),w=(x.player_slot<128)===x.radiant_win;
       return '<tr class="rw" onclick="openMatch(\''+esc(x.match_id)+'\')"><td><span class="hero">'+avId(x.hero_id,n)+'<span class="pn">'+esc(n)+'</span></span></td><td class="'+(w?"win":"lose")+'">'+(w?"Победа":"Поражение")+'</td><td>'+x.kills+'/'+x.deaths+'/'+x.assists+'</td><td>'+mmss(x.duration)+'</td><td>'+esc(MODES[x.game_mode]||("Режим "+x.game_mode))+'</td><td>'+new Date(x.start_time*1000).toLocaleDateString("ru-RU")+'</td></tr>'}).join("");
     $("pres").innerHTML='<div class="card phead">'+(pf.avatarfull?'<img class="pav" alt="" src="'+esc(pf.avatarfull)+'" onerror="this.remove()">':"")+'<div><div class="pname">'+esc(pf.personaname||"Аноним")+'</div><div class="s">ID '+esc(id)+' · '+esc(rankTxt(pr.rank_tier))+(url?' · <a href="'+esc(url)+'" target="_blank" rel="noopener">Steam</a>':"")+'</div></div><div class="pst"><div class="k">Победы / поражения</div><div class="v"><span class="win">'+win+'</span> / <span class="lose">'+lose+'</span></div><div class="s">Винрейт '+wrp+'%</div></div></div>'+
-    (th.length?'<div class="sec"><div class="label">Любимые герои</div><div class="team"><div class="sc"><table class="mt" style="min-width:420px"><tr><th>Герой</th><th>Игры</th><th>Победы</th><th>Винрейт</th></tr>'+th.map(x=>{const n=H[x.hero_id]||("Hero "+x.hero_id);return '<tr><td><span class="hero">'+avId(x.hero_id,n)+'<span class="pn">'+esc(n)+'</span></span></td><td>'+x.games+'</td><td>'+x.win+'</td><td>'+(x.win/x.games*100).toFixed(1)+'%</td></tr>'}).join("")+'</table></div></div></div>':"")+
-    '<div class="sec"><div class="label">Последние матчи · нажмите, чтобы открыть разбор</div>'+(rr?'<div class="team"><div class="sc"><table class="mt" style="min-width:520px"><tr><th>Герой</th><th>Итог</th><th>K/D/A</th><th>Время</th><th>Режим</th><th>Дата</th></tr>'+rr+'</table></div></div>':'<div class="msg">История матчей скрыта настройками профиля (Expose Public Match Data) или пуста.</div>')+'</div>';
+    (th.length?'<div class="sec"><div class="label">Любимые герои · нажмите на героя, чтобы увидеть графики</div><div class="team"><div class="sc"><table class="mt" style="min-width:420px"><tr><th>Герой</th><th>Игры</th><th>Победы</th><th>Винрейт</th></tr>'+th.map(x=>{const n=H[x.hero_id]||("Hero "+x.hero_id);return '<tr class="rw" onclick="heroDetail(\''+esc(id)+'\','+(+x.hero_id)+')"><td><span class="hero">'+avId(x.hero_id,n)+'<span class="pn">'+esc(n)+'</span></span></td><td>'+x.games+'</td><td>'+x.win+'</td><td>'+(x.win/x.games*100).toFixed(1)+'%</td></tr>'}).join("")+'</table></div></div></div>':"")+
+    '<div id="hdet"></div><div class="sec"><div class="label">Последние матчи · нажмите, чтобы открыть разбор</div>'+(rr?'<div class="team"><div class="sc"><table class="mt" style="min-width:520px"><tr><th>Герой</th><th>Итог</th><th>K/D/A</th><th>Время</th><th>Режим</th><th>Дата</th></tr>'+rr+'</table></div></div>':'<div class="msg">История матчей скрыта настройками профиля (Expose Public Match Data) или пуста.</div>')+'</div>';
   }catch(e){pmsg("Не удалось загрузить профиль. Попробуйте через минуту: у OpenDota есть лимит запросов.")}
 }
 let ICONS=null;
@@ -312,7 +335,87 @@ function buildSec(P){
   const one=p=>{const l=buildTimes(p);return '<div class="bp"><div><span class="pn">'+esc(p.nm)+'</span> <span class="hn">'+esc(p.hn)+'</span></div><div class="chips">'+(l.length?l.map(chip).join(""):'<span class="hn">нет крупных предметов</span>')+'</div></div>'};
   return '<div class="sec"><div class="label">Сборка предметов · время появления</div>'+[true,false].map(r=>'<div class="team"><div class="th"><span>'+(r?"СИЛЫ СВЕТА":"СИЛЫ ТЬМЫ")+'</span></div>'+P.filter(p=>p.rad===r).map(one).join("")+'</div>').join("")+'<div class="s" style="margin-top:8px">Показаны собранные предметы дороже 1000 золота. «~» — время приблизительное (по последней купленной части).</div></div>'
 }
-document.addEventListener("DOMContentLoaded",()=>{$("mid").addEventListener("keydown",e=>{if(e.key==="Enter")findMatch()});$("pid").addEventListener("keydown",e=>{if(e.key==="Enter")findPlayer()})});
+
+function nf(v){return v==null||isNaN(v)?"–":v>=100?Math.round(v).toLocaleString("ru-RU"):v.toLocaleString("ru-RU",{maximumFractionDigits:1})}
+function movAvg(a,w){return a.map((_,i)=>{const t=a.slice(Math.max(0,i-w+1),i+1);return t.reduce((x,y)=>x+y,0)/t.length})}
+const isW=m=>(m.player_slot<128)===m.radiant_win;
+function lineSvg(raw,avg,o,L){
+  const W=700,Ht=210,pl=42,pr=10,pt=12,pb=22,n=avg.length,all=(raw||[]).concat(avg);
+  let mn=o.min!=null?o.min:Math.min(...all),mx=o.max!=null?o.max:Math.max(...all);if(mx===mn){mx+=1;mn-=1}
+  const X=i=>pl+(n<2?(W-pl-pr)/2:i/(n-1)*(W-pl-pr)),Y=v=>pt+(1-(v-mn)/(mx-mn))*(Ht-pt-pb);
+  const tip=i=>new Date(L[i].start_time*1000).toLocaleDateString("ru-RU")+" · "+(isW(L[i])?"победа":"поражение")+" · "+(raw?raw[i]:avg[i]).toFixed(o.d);
+  const dots=(raw||avg).map((v,i)=>'<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="'+(raw?3:2.5)+'" fill="'+(raw?"#7c94ab":"#c9f1ff")+'" opacity="'+(raw?".75":"1")+'" style="cursor:pointer" onclick="openMatch(\''+esc(L[i].match_id)+'\')"><title>'+esc(tip(i))+'</title></circle>').join("");
+  const grid=[mn,(mn+mx)/2,mx].map(v=>'<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(v).toFixed(1)+'" y2="'+Y(v).toFixed(1)+'" stroke="#1b2c42"/><text x="'+(pl-6)+'" y="'+(Y(v)+4).toFixed(1)+'" text-anchor="end" fill="#7c94ab" font-size="11">'+v.toFixed(o.d)+(o.u||"")+'</text>').join("");
+  const ref=o.ref!=null?'<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(o.ref).toFixed(1)+'" y2="'+Y(o.ref).toFixed(1)+'" stroke="#2d4d70" stroke-dasharray="4 4"/>':"";
+  return '<svg viewBox="0 0 700 210" style="width:100%;min-width:520px">'+grid+ref+'<polyline fill="none" stroke="#7fd6ff" stroke-width="2.5" points="'+avg.map((v,i)=>X(i).toFixed(1)+","+Y(v).toFixed(1)).join(" ")+'"/>'+dots+'<text x="'+pl+'" y="207" fill="#7c94ab" font-size="11">старые игры</text><text x="'+(W-pr)+'" y="207" text-anchor="end" fill="#7c94ab" font-size="11">последние</text></svg>'
+}
+let HD=null;
+async function heroDetail(id,hid){
+  const box=$("hdet");box.innerHTML='<div class="msg">Загружаю матчи на герое…</div>';
+  try{
+    const H=await loadHeroes();
+    const fl=["match_id","player_slot","radiant_win","start_time","duration","kills","deaths","assists","gold_per_min","xp_per_min","last_hits","hero_damage"];
+    const r=await fetch(API+"players/"+id+"/matches?hero_id="+hid+"&limit=100&"+fl.map(f=>"project="+f).join("&"));
+    if(!r.ok)throw new Error(r.status);
+    const L=(await r.json()).sort((a,b)=>a.start_time-b.start_time);
+    if(!L.length){box.innerHTML='<div class="msg">Матчей на этом герое в открытой истории нет.</div>';return}
+    HD={L,name:H[hid]||("Hero "+hid)};drawHero("w");
+    box.scrollIntoView({behavior:"smooth",block:"nearest"});
+  }catch(e){box.innerHTML='<div class="msg">Не удалось загрузить матчи на этом герое. Попробуйте позже.</div>'}
+}
+function drawHero(k){
+  const {L,name}=HD,mean=a=>a.reduce((x,y)=>x+y,0)/(a.length||1),wins=L.filter(isW).length;
+  const kda=L.map(m=>((m.kills||0)+(m.assists||0))/Math.max(1,m.deaths||0)),gpm=L.map(m=>m.gold_per_min||0),xpm=L.map(m=>m.xp_per_min||0);
+  const wr=L.map((m,i)=>{const t=L.slice(Math.max(0,i-9),i+1);return t.filter(isW).length/t.length*100});
+  const C={w:[null,wr,{min:0,max:100,ref:50,d:0,u:"%"},"Винрейт: скользящее окно по 10 играм"],k:[kda,movAvg(kda,5),{d:1},"KDA (убийства + помощь) / смерти. Линия — среднее за 5 игр"],g:[gpm,movAvg(gpm,5),{d:0},"Золото в минуту. Линия — среднее за 5 игр"],x:[xpm,movAvg(xpm,5),{d:0},"Опыт в минуту. Линия — среднее за 5 игр"]}[k];
+  const bi=kda.indexOf(Math.max(...kda)),bm=L[bi];
+  const card=(t,v,s)=>'<div class="card"><div class="k">'+t+'</div><div class="v">'+v+'</div><div class="s">'+s+'</div></div>';
+  const tb=[["w","Винрейт"],["k","KDA"],["g","GPM"],["x","XPM"]].map(x=>'<button class="tab'+(x[0]===k?" on":"")+'" onclick="drawHero(\''+x[0]+'\')">'+x[1]+'</button>').join("");
+  const empty=k!=="w"&&!C[0].some(v=>v>0);
+  $("hdet").innerHTML='<div class="sec"><div class="label">'+esc(name)+' · последние '+L.length+' игр</div><div class="top">'+
+   card("Матчей / побед",L.length+" / "+wins,"винрейт "+nf(wins/L.length*100)+"%")+card("Средний KDA",nf(mean(kda)),nf(mean(L.map(m=>m.kills||0)))+" / "+nf(mean(L.map(m=>m.deaths||0)))+" / "+nf(mean(L.map(m=>m.assists||0))))+
+   card("Средний GPM / XPM",nf(mean(gpm))+" / "+nf(mean(xpm)),"LH "+nf(mean(L.map(m=>m.last_hits||0))))+
+   '<div class="card pick" onclick="openMatch(\''+esc(bm.match_id)+'\')"><div class="k">Лучший матч по KDA</div><div class="v">'+nf(kda[bi])+'</div><div class="s">'+bm.kills+"/"+bm.deaths+"/"+bm.assists+' · '+(isW(bm)?"победа":"поражение")+' · открыть</div></div></div>'+
+   '<div class="tabs" style="margin-top:14px">'+tb+'</div><div class="cbox"><div class="s" style="margin-bottom:6px">'+C[3]+'</div>'+(empty?'<div class="msg">OpenDota не отдал эти данные для матчей игрока.</div>':'<div class="sc">'+lineSvg(C[0],C[1],C[2],L)+'</div>')+'<div class="s">Наведите на точку: дата и результат. Клик по точке открывает матч.</div></div></div>';
+}
+async function resolveId(t){const id=parseId(t);if(id==="vanity")throw "vanity";if(id)return id;
+  const r=await (await fetch(API+"search?q="+encodeURIComponent(t.trim()))).json();if(!r||!r.length)throw "none";return String(r[0].account_id)}
+function fetchP(id){const g=u=>fetch(API+"players/"+id+u).then(r=>r.ok?r.json():null).catch(()=>null);
+  return Promise.all([g(""),g("/wl"),g("/totals"),g("/heroes"),g("/peers")]).then(([pr,wl,tt,hs,pe])=>({id,pr,wl,tt,hs,pe}))}
+function cmsg(t){$("cres").innerHTML='<div class="msg">'+esc(t)+'</div>'}
+async function compare(){
+  const a=$("ca").value.trim(),b=$("cb").value.trim();
+  if(!a||!b){cmsg("Введите двух игроков");return}
+  cmsg("Загружаю данные…");
+  try{
+    const H=await loadHeroes();
+    const [ia,ib]=await Promise.all([resolveId(a),resolveId(b)]);
+    const [A,B]=await Promise.all([fetchP(ia),fetchP(ib)]);
+    if(!A.pr||!A.pr.profile||!B.pr||!B.pr.profile){cmsg("Один из профилей не найден. Проверьте ID.");return}
+    renderCmp(A,B,H);
+  }catch(e){cmsg(e==="vanity"?"Короткие ссылки steamcommunity.com/id/… не поддерживаются: используйте числовой ID или ник.":e==="none"?"Игрок по нику не найден.":"Не удалось загрузить данные. Попробуйте через минуту: у OpenDota есть лимит запросов.")}
+}
+function renderCmp(A,B,H){
+  const av=(x,f)=>{const t=(x.tt||[]).find(q=>q.field===f);return t&&t.n?t.sum/t.n:null};
+  const wr=x=>{const t=x.wl?x.wl.win+x.wl.lose:0;return t?x.wl.win/t*100:null};
+  const kda=x=>{const d=av(x,"deaths");return d?(av(x,"kills")+av(x,"assists"))/d:null};
+  const M=[["Матчей",x=>x.wl?x.wl.win+x.wl.lose:null,1],["Винрейт, %",wr,1],["Убийства",x=>av(x,"kills"),1],["Смерти",x=>av(x,"deaths"),-1],["Помощь",x=>av(x,"assists"),1],["KDA",kda,1],["GPM",x=>av(x,"gold_per_min"),1],["XPM",x=>av(x,"xp_per_min"),1],["Добитые крипы",x=>av(x,"last_hits"),1],["Денаи",x=>av(x,"denies"),1],["Урон по героям",x=>av(x,"hero_damage"),1],["Лечение",x=>av(x,"hero_healing"),1],["Урон по строениям",x=>av(x,"tower_damage"),1]];
+  const pf=x=>x.pr.profile,nm=x=>esc(pf(x).personaname||"Аноним");
+  const head=x=>{const w=x.wl?x.wl.win:0,l=x.wl?x.wl.lose:0;return '<div class="card phead" style="margin-top:0">'+(pf(x).avatarfull?'<img class="pav" style="width:56px;height:56px" alt="" src="'+esc(pf(x).avatarfull)+'" onerror="this.remove()">':"")+'<div><div class="pname" style="font-size:20px">'+nm(x)+'</div><div class="s">ID '+esc(x.id)+' · '+esc(rankTxt(x.pr.rank_tier))+'</div><div class="s"><span class="win">'+w+'</span> / <span class="lose">'+l+'</span></div></div></div>'};
+  const rows=M.map(([lb,f,dir])=>{const va=f(A),vb=f(B),t=(va||0)+(vb||0),pa=t?va/t*100:50;
+    const wa=va!=null&&vb!=null&&va!==vb?((va>vb)===(dir>0)):null;
+    return '<div class="cr"><div class="cv'+(wa===true?" w":"")+'">'+nf(va)+'</div><div><div class="cl">'+lb+'</div><div class="cb"><i style="width:'+pa.toFixed(1)+'%"></i></div></div><div class="cv r'+(wa===false?" w":"")+'">'+nf(vb)+'</div></div>'}).join("");
+  const top=x=>(x.hs||[]).filter(h=>h.games>0).slice(0,5).map(h=>{const n=H[h.hero_id]||("Hero "+h.hero_id);return '<div class="hr"><span class="hero">'+avId(h.hero_id,n)+'<span class="pn">'+esc(n)+'</span></span><span>'+h.games+' игр · '+nf(h.win/h.games*100)+'%</span></div>'}).join("")||'<div class="msg">нет данных</div>';
+  const mapA=new Map((A.hs||[]).map(h=>[h.hero_id,h]));
+  const common=(B.hs||[]).filter(h=>h.games>=3&&mapA.has(h.hero_id)&&mapA.get(h.hero_id).games>=3).sort((p,q)=>Math.min(q.games,mapA.get(q.hero_id).games)-Math.min(p.games,mapA.get(p.hero_id).games)).slice(0,8);
+  const cm=common.length?'<div class="sec"><div class="label">Общие герои (от 3 игр у каждого)</div><div class="team"><div class="sc"><table class="mt" style="min-width:460px"><tr><th>Герой</th><th>'+nm(A)+'</th><th>'+nm(B)+'</th></tr>'+common.map(h=>{const a=mapA.get(h.hero_id),n=H[h.hero_id]||("Hero "+h.hero_id),wa=a.win/a.games,wb=h.win/h.games;
+    return '<tr><td><span class="hero">'+avId(h.hero_id,n)+'<span class="pn">'+esc(n)+'</span></span></td><td class="'+(wa>wb?"mx":"")+'">'+a.games+' игр · '+nf(wa*100)+'%</td><td class="'+(wb>wa?"mx":"")+'">'+h.games+' игр · '+nf(wb*100)+'%</td></tr>'}).join("")+'</table></div></div></div>':"";
+  const pe=(A.pe||[]).find(x=>String(x.account_id)===String(B.id));
+  const tg=pe?'<div class="two"><div class="card"><div class="k">Играли вместе</div><div class="v">'+pe.with_games+' игр</div><div class="s">побед '+pe.with_win+' · винрейт '+nf(pe.with_games?pe.with_win/pe.with_games*100:0)+'%</div></div><div class="card"><div class="k">Друг против друга</div><div class="v">'+pe.against_games+' игр</div><div class="s">'+nm(A)+' выиграл '+pe.against_win+' · '+nm(B)+' '+(pe.against_games-pe.against_win)+'</div></div></div>':'<div class="msg">В публичной истории эти игроки вместе и друг против друга не встречались.</div>';
+  $("cres").innerHTML='<div class="two">'+head(A)+head(B)+'</div><div class="sec"><div class="label">Средние показатели за матч · ярче значение лучшего</div><div class="team">'+rows+'</div></div>'+
+   '<div class="sec"><div class="label">Любимые герои</div><div class="two"><div class="team"><div class="th"><span>'+nm(A)+'</span></div>'+top(A)+'</div><div class="team"><div class="th"><span>'+nm(B)+'</span></div>'+top(B)+'</div></div></div>'+cm+'<div class="sec"><div class="label">Встречи между игроками</div>'+tg+'</div>';
+}
+document.addEventListener("DOMContentLoaded",()=>{$("mid").addEventListener("keydown",e=>{if(e.key==="Enter")findMatch()});$("pid").addEventListener("keydown",e=>{if(e.key==="Enter")findPlayer()});["ca","cb"].forEach(i=>$(i).addEventListener("keydown",e=>{if(e.key==="Enter")compare()}))});
 </script>
 </body>
 </html>
