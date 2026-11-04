@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FROSTMETA — мета Dota 2</title>
+<style>
+:root{color-scheme:dark;--bg:#05080d;--panel:#0b121c;--panel2:#101a28;--line:#1b2c42;--ice:#7fd6ff;--ice2:#c9f1ff;--txt:#e6f4ff;--mut:#7c94ab;--up:#5be3b0;--dn:#ff6b87;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:radial-gradient(900px 500px at 50% -10%,#0f2740 0%,transparent 60%),var(--bg);color:var(--txt);font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;min-height:100vh}
+.wrap{max-width:980px;margin:0 auto;padding:28px 16px 60px}
+header{text-align:center;margin-bottom:26px}
+h1{margin:0;font-size:clamp(30px,6vw,52px);letter-spacing:.18em;font-weight:800;background:linear-gradient(180deg,#fff,var(--ice) 60%,#3a8fc4);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 40px #7fd6ff40}
+.sub{color:var(--mut);margin-top:6px;font-size:14px;letter-spacing:.08em}
+.label{font-size:11px;letter-spacing:.2em;color:var(--mut);text-transform:uppercase;margin:18px 0 8px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab{background:var(--panel);border:1px solid var(--line);color:var(--mut);padding:9px 14px;border-radius:10px;cursor:pointer;font:inherit;font-size:14px;transition:.2s}
+.tab:hover{color:var(--ice2);border-color:#2d4d70}
+.tab.on{color:#03121c;background:linear-gradient(180deg,var(--ice2),var(--ice));border-color:var(--ice);box-shadow:0 0 22px #7fd6ff50;font-weight:700}
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+input,select{background:var(--panel);border:1px solid var(--line);color:var(--txt);padding:10px 12px;border-radius:10px;font:inherit;font-size:14px;outline:none}
+input{flex:1;min-width:160px}input:focus,select:focus{border-color:var(--ice);box-shadow:0 0 0 3px #7fd6ff22}
+.top{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:20px}
+.card{background:linear-gradient(160deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:14px;padding:14px;position:relative;overflow:hidden}
+.card::after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,#7fd6ff10 50%,transparent 60%);pointer-events:none}
+.card .k{font-size:11px;color:var(--mut);letter-spacing:.15em;text-transform:uppercase}
+.card .v{font-size:20px;font-weight:700;margin-top:4px;color:var(--ice2)}
+.card .s{font-size:13px;color:var(--mut);margin-top:2px}
+.list{margin-top:20px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}
+.row{display:grid;grid-template-columns:44px 1.4fr 1.6fr 70px 70px;gap:10px;align-items:center;padding:11px 14px;border-top:1px solid var(--line);transition:.15s}
+.row:first-child{border-top:0}
+.row:not(.head):hover{background:#0f1d2e}
+.head{font-size:11px;letter-spacing:.14em;color:var(--mut);text-transform:uppercase;background:#080e16}
+.hero{display:flex;align-items:center;gap:10px;font-weight:600;min-width:0}
+.av{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;color:#03121c;background:radial-gradient(circle at 30% 25%,#fff,var(--ice) 55%,#2b78a8)}
+.nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tier{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:14px;border:1px solid}
+.tS{color:#fff;background:#1e6fa3;border-color:var(--ice);box-shadow:0 0 14px #7fd6ff60}
+.tA{color:var(--ice2);background:#10314a;border-color:#2b6a96}
+.tB{color:var(--mut);background:#0f1b29;border-color:var(--line)}
+.tC{color:#6a7d90;background:#0a121b;border-color:#14202e}
+.wr{display:flex;align-items:center;gap:8px}
+.wr b{min-width:50px;font-variant-numeric:tabular-nums}
+.trk{flex:1;height:6px;border-radius:4px;background:#0a1420;overflow:hidden}
+.fill{height:100%;background:linear-gradient(90deg,#2b78a8,var(--ice2));border-radius:4px;box-shadow:0 0 10px #7fd6ff80}
+.num{font-variant-numeric:tabular-nums;text-align:right}
+.up{color:var(--up)}.dn{color:var(--dn)}
+.note{margin-top:18px;font-size:12px;color:var(--mut);text-align:center;line-height:1.5}
+.empty{padding:30px;text-align:center;color:var(--mut)}
+@media(max-width:640px){.row{grid-template-columns:36px 1fr 60px 56px;padding:10px}.row>:nth-child(3){grid-column:1/-1;order:5}.head>:nth-child(3){display:none}.head{grid-template-columns:36px 1fr 60px 56px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>FROSTMETA</h1>
+<div class="sub">МЕТА DOTA 2 · ПО РЕЙТИНГАМ И ПОЗИЦИЯМ</div>
+</header>
+
+<div class="label">Рейтинг</div>
+<div class="tabs" id="ranks"></div>
+<div class="label">Позиция</div>
+<div class="tabs" id="roles"></div>
+
+<div class="bar">
+<input id="q" placeholder="Поиск героя…" autocomplete="off">
+<select id="sort">
+<option value="wr">Сортировка: винрейт</option>
+<option value="pr">Сортировка: пикрейт</option>
+<option value="tr">Сортировка: тренд</option>
+</select>
+</div>
+
+<div class="top" id="top"></div>
+<div class="list" id="list"></div>
+<div class="note" id="note"></div>
+</div>
+
+<script>
+let DB={ranks:[],roles:[],data:{}};
+let rank=2,role=0;
+const $=id=>document.getElementById(id);
+function tabs(el,items,cur,fn){el.innerHTML="";items.forEach((t,i)=>{const b=document.createElement("button");b.className="tab"+(i===cur?" on":"");b.textContent=t;b.onclick=()=>fn(i);el.appendChild(b)})}
+function tier(w){return w>=52.5?"S":w>=50.8?"A":w>=49?"B":"C"}
+function render(){
+  tabs($("ranks"),DB.ranks,rank,i=>{rank=i;render()});
+  tabs($("roles"),DB.roles,role,i=>{role=i;render()});
+  let d=(DB.data[rank+"|"+role]||[]).slice();
+  const k=$("sort").value;
+  d.sort((a,b)=>b[k]-a[k]);
+  const best=[...d].sort((a,b)=>b.wr-a.wr)[0],pop=[...d].sort((a,b)=>b.pr-a.pr)[0],rise=[...d].sort((a,b)=>b.tr-a.tr)[0];
+  $("top").innerHTML=[["Лучший винрейт",best,best.wr.toFixed(1)+"%"],["Самый популярный",pop,pop.pr.toFixed(1)+"% пиков"],["Растёт быстрее всех",rise,"+"+rise.tr.toFixed(1)+" п.п."]]
+   .map(([t,h,s])=>`<div class="card"><div class="k">${t}</div><div class="v">${h.hero}</div><div class="s">${s}</div></div>`).join("");
+  const q=$("q").value.trim().toLowerCase();
+  const f=d.filter(x=>x.hero.toLowerCase().includes(q));
+  $("list").innerHTML=`<div class="row head"><div>Тир</div><div>Герой</div><div>Винрейт</div><div class="num">Пик</div><div class="num">Тренд</div></div>`+
+  (f.length?f.map(x=>{const t=tier(x.wr),ini=x.hero.split(" ").map(w=>w[0]).join("").slice(0,2);
+   return`<div class="row"><div class="tier t${t}">${t}</div><div class="hero"><span class="av">${ini}</span><span class="nm">${x.hero}</span></div>
+   <div class="wr"><b>${x.wr.toFixed(1)}%</b><div class="trk"><div class="fill" style="width:${Math.min(100,(x.wr-44)/12*100)}%"></div></div></div>
+   <div class="num">${x.pr.toFixed(1)}%</div><div class="num ${x.tr>=0?"up":"dn"}">${x.tr>=0?"▲":"▼"} ${Math.abs(x.tr).toFixed(1)}</div></div>`}).join(""):`<div class="empty">Герой не найден</div>`);
+}
+$("q").oninput=render;$("sort").onchange=render;
+fetch("data.json",{cache:"no-cache"}).then(r=>r.json()).then(j=>{DB=j;
+ $("note").textContent=j.demo?"⚠ Демонстрационные данные. После первого запуска обновления здесь появится реальная статистика.":"Данные: STRATZ · обновлено "+j.updated+" · тренд — изменение винрейта к прошлому обновлению";
+ render()}).catch(()=>{$("list").innerHTML='<div class="empty">Не удалось загрузить data.json. Откройте сайт через хостинг (GitHub Pages), а не как файл.</div>'});
+</script>
+</body>
+</html>
