@@ -1,5 +1,5 @@
 """Ежедневное обновление меты Dota 2 из STRATZ GraphQL -> data.json"""
-import json, os, time, pathlib, datetime, urllib.request
+import json, os, time, pathlib, datetime, urllib.request, urllib.error
 
 TOKEN = os.environ["STRATZ_TOKEN"]
 URL = "https://api.stratz.com/graphql"
@@ -13,10 +13,13 @@ POSITIONS = [("POSITION_1", "Pos 1 · Carry"), ("POSITION_2", "Pos 2 · Mid"), (
 def gql(query):
     req = urllib.request.Request(URL, json.dumps({"query": query}).encode(), {
         "Content-Type": "application/json", "Authorization": "Bearer " + TOKEN, "User-Agent": "STRATZ_API"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        d = json.load(r)
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            d = json.load(r)
+    except urllib.error.HTTPError as e:
+        raise SystemExit("HTTP %s: %s\nQUERY: %s" % (e.code, e.read().decode("utf-8", "replace")[:1500], query))
     if d.get("errors"):
-        raise SystemExit("STRATZ error: " + json.dumps(d["errors"])[:900])
+        raise SystemExit("STRATZ error: " + json.dumps(d["errors"])[:900] + "\nQUERY: " + query)
     return d["data"]
 
 names = {h["id"]: h["displayName"] for h in gql("{constants{heroes{id displayName}}}")["constants"]["heroes"]}
@@ -33,7 +36,7 @@ if OUT.exists():
 data = {}
 for bi, (b, _) in enumerate(BRACKETS):
     for pi, (p, _) in enumerate(POSITIONS):
-        rows = gql("{heroStats{winWeek(take:1,bracketIds:[%s],positionIds:[%s]){heroId matchCount winCount}}}"
+        rows = gql("{heroStats{winWeek(take:1,bracketBasicIds:[%s],positionIds:[%s]){heroId matchCount winCount}}}"
                    % (b, p))["heroStats"]["winWeek"]
         agg = {}
         for r in rows:
