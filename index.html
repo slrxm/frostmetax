@@ -68,6 +68,22 @@ input{flex:1;min-width:160px}input:focus,select:focus{border-color:var(--ice);bo
 .mt tr:hover td{background:#0f1d2e}
 .pl{color:var(--mut);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mx{color:var(--ice2);font-weight:700}
+
+.av{position:relative;overflow:hidden}.av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.it{width:30px;height:22px;border-radius:4px;margin-right:2px;background:#0a1420;object-fit:cover}
+.itc{white-space:nowrap;text-align:left!important}
+tr.rw{cursor:pointer}
+tr.dt{display:none}tr.dt.open{display:table-row}tr.dt td{background:#080e16;text-align:left!important}
+.dg{display:flex;flex-wrap:wrap;gap:10px 26px;padding:4px 2px}
+.dg .k{font-size:10px;color:var(--mut);letter-spacing:.12em;text-transform:uppercase}
+.dg b{font-size:15px;color:var(--ice2)}
+.sec{margin-top:22px}
+.ev{margin-top:8px;max-height:420px;overflow-y:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.er{display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid var(--line);font-size:13px}
+.er:first-child{border-top:0}
+.et{width:46px;color:var(--mut);font-variant-numeric:tabular-nums}
+.dot{flex:none;width:9px;height:9px;border-radius:50%}.dr{background:var(--up)}.dd{background:var(--dn)}
+.cbox{margin-top:8px;border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:12px}
 </style>
 </head>
 <body>
@@ -145,13 +161,15 @@ const MODES={1:"All Pick",2:"Captains Mode",3:"Random Draft",4:"Single Draft",5:
 let HEROES=null;
 function esc(t){return String(t==null?"":t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function msg(t){$("mres").innerHTML='<div class="msg">'+esc(t)+'</div>'}
-async function loadHeroes(){if(HEROES)return HEROES;const j=await (await fetch(API+"heroes")).json();HEROES={};j.forEach(h=>HEROES[h.id]=h.localized_name);return HEROES}
+async function loadHeroes(){if(HEROES)return HEROES;const j=await (await fetch(API+"heroes")).json();HEROES={};j.forEach(h=>{HEROES[h.id]=h.localized_name;HN[h.id]=String(h.name||"").replace("npc_dota_hero_","")});return HEROES}
+let ITEMS=null,HN={},CUR=null,EV=[];
+async function loadItems(){if(ITEMS)return ITEMS;try{ITEMS=await (await fetch(API+"constants/item_ids")).json()}catch(e){ITEMS={}}return ITEMS}
 async function findMatch(){
   const id=$("mid").value.replace(/\D/g,"");
   if(!id){msg("Введите числовой ID матча");return}
   msg("Загружаю матч…");
   try{
-    const [H,r]=await Promise.all([loadHeroes(),fetch(API+"matches/"+id)]);
+    const [H,I,r]=await Promise.all([loadHeroes(),loadItems(),fetch(API+"matches/"+id)]);
     if(r.status===404){msg("Матч не найден. Проверьте ID: возможно, он слишком старый или ещё не попал в базу.");return}
     if(!r.ok)throw new Error(r.status);
     const m=await r.json();
@@ -160,32 +178,60 @@ async function findMatch(){
   }catch(e){msg("Не удалось загрузить матч. Попробуйте через минуту: у OpenDota есть лимит запросов.")}
 }
 function mmss(s){return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")}
+function fmt(v){return v==null?"–":typeof v==="number"?Math.round(v).toLocaleString("ru-RU"):v}
+function itemImg(id){const k=ITEMS&&ITEMS[id];return k?'<img class="it" title="'+esc(k.replace(/_/g," "))+'" alt="" src="https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/items/'+esc(k)+'.png" onerror="this.style.visibility=\'hidden\'">':""}
+function spark(a,c){if(!a||a.length<2)return"";const w=220,h=44,mx=Math.max(1,...a);return '<svg viewBox="0 0 '+w+' '+h+'" width="220" height="44"><polyline fill="none" stroke="'+c+'" stroke-width="2" points="'+a.map((v,i)=>(i/(a.length-1)*w).toFixed(1)+","+(h-v/mx*(h-4)-2).toFixed(1)).join(" ")+'"/></svg>'}
+function buildEvents(m,P){
+  const E=[];
+  (m.objectives||[]).forEach(o=>{
+    if(o.type==="building_kill"&&o.key){const k=o.key,rad=/goodguys/.test(k);
+      const kind=/fort/.test(k)?"Трон":/rax/.test(k)?"казармы":/tower/.test(k)?"башня":null;if(!kind)return;
+      const tier=(k.match(/tower(\d)/)||[])[1],lane=/_top/.test(k)?" верх":/_mid/.test(k)?" центр":/_bot/.test(k)?" низ":"";
+      E.push({t:o.time,rad:!rad,mk:1,txt:(rad?"Свет":"Тьма")+": потеряна "+kind+(tier?" T"+tier:"")+lane});}
+    else if(o.type==="CHAT_MESSAGE_ROSHAN_KILL")E.push({t:o.time,rad:o.team===2,mk:2,txt:"Рошан убит ("+(o.team===2?"Свет":"Тьма")+")"});
+    else if(o.type==="CHAT_MESSAGE_AEGIS"){const p=P.find(x=>x.player_slot===o.player_slot);E.push({t:o.time,rad:p?p.rad:true,txt:"Эгида подобрана: "+(p?p.hn:"?")})}
+  });
+  let fb=null;P.forEach(p=>(p.kills_log||[]).forEach(k=>{if(!fb||k.time<fb.t)fb={t:k.time,p}}));
+  if(fb)E.push({t:fb.t,rad:fb.p.rad,txt:"Первая кровь: "+fb.p.hn});
+  (m.teamfights||[]).forEach(f=>{let dr=0,dd=0;(f.players||[]).forEach((x,i)=>{if(P[i]){if(P[i].rad)dr+=x.deaths||0;else dd+=x.deaths||0}});
+    if(dr+dd>=3)E.push({t:f.start,rad:dd>dr,txt:"Драка: погибло "+dr+" у Света и "+dd+" у Тьмы"+(dr===dd?" (ничья)":"")})});
+  return E.sort((a,b)=>a.t-b.t);
+}
+function drawChart(k){
+  const m=CUR;if(!m)return;
+  $("cg").className="tab"+(k==="g"?" on":"");$("cx").className="tab"+(k==="x"?" on":"");
+  const a=k==="g"?m.radiant_gold_adv:m.radiant_xp_adv;
+  if(!a||a.length<2){$("chartbox").innerHTML='<div class="msg">Нет данных по минутам: матч не разобран OpenDota.<br><button class="btn" style="margin-top:10px" onclick="reqParse()">Запросить разбор</button><div id="rq" class="s"></div></div>';return}
+  const W=700,z=110,mx=Math.max(1,...a.map(Math.abs)),X=i=>i/(a.length-1)*W,Y=v=>z-v/mx*(z-14);
+  const pts=a.map((v,i)=>X(i).toFixed(1)+","+Y(v).toFixed(1));
+  const area="M0,"+z+" L"+pts.join(" L")+" L"+W+","+z+" Z";
+  const mk=EV.filter(e=>e.mk&&e.t>=0&&e.t/60<=a.length-1).map(e=>{const i=e.t/60;return '<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(a[Math.round(i)]).toFixed(1)+'" r="'+(e.mk===2?5:3)+'" fill="'+(e.mk===2?"#ffc857":"#fff")+'" stroke="#05080d"><title>'+esc(mmss(e.t)+" · "+e.txt)+'</title></circle>'}).join("");
+  const last=a[a.length-1];
+  $("chartbox").innerHTML='<div class="s" style="margin-bottom:6px">'+(last>=0?"Свет":"Тьма")+' впереди на '+fmt(Math.abs(last))+' к '+(a.length-1)+'-й минуте</div><div class="sc"><svg viewBox="0 0 700 220" style="width:100%;min-width:520px"><defs><clipPath id="cu"><rect x="0" y="0" width="700" height="'+z+'"/></clipPath><clipPath id="cd"><rect x="0" y="'+z+'" width="700" height="'+z+'"/></clipPath></defs><path d="'+area+'" fill="#5be3b0" fill-opacity=".35" clip-path="url(#cu)"/><path d="'+area+'" fill="#ff6b87" fill-opacity=".35" clip-path="url(#cd)"/><line x1="0" x2="700" y1="'+z+'" y2="'+z+'" stroke="#2d4d70" stroke-dasharray="4 4"/><polyline points="'+pts.join(" ")+'" fill="none" stroke="#c9f1ff" stroke-width="2"/>'+mk+'</svg></div><div class="s">Выше линии — преимущество Сил Света, ниже — Сил Тьмы. Жёлтые точки — Рошан, белые — строения (наведите, чтобы увидеть).</div>';
+}
+async function reqParse(){try{const r=await fetch(API+"request/"+CUR.match_id,{method:"POST"});$("rq").textContent=r.ok?"Запрос отправлен. Подождите 1–3 минуты и нажмите «Найти» снова.":"Не удалось отправить запрос ("+r.status+")."}catch(e){$("rq").textContent="Не удалось отправить запрос."}}
 function showMatch(m,H){
-  const P=m.players.map(p=>({...p,rad:p.isRadiant!==undefined?p.isRadiant:p.player_slot<128,
-    hn:H[p.hero_id]||("Hero "+p.hero_id),nm:p.personaname||p.name||"Аноним"}));
-  const best=(k)=>P.reduce((a,b)=>(b[k]||0)>(a[k]||0)?b:a,P[0]);
+  const P=m.players.map(p=>({...p,rad:p.isRadiant!==undefined?p.isRadiant:p.player_slot<128,hn:H[p.hero_id]||("Hero "+p.hero_id),nm:p.personaname||p.name||"Аноним"}));
+  CUR=m;EV=buildEvents(m,P);
+  const best=k=>P.reduce((a,b)=>(b[k]||0)>(a[k]||0)?b:a,P[0]);
   const bk=best("kills"),bl=best("last_hits"),bd=best("denies"),bh=best("hero_damage");
-  const card=(t,p,v)=>'<div class="card"><div class="k">'+t+'</div><div class="v">'+esc(p.hn)+'</div><div class="s">'+esc(p.nm)+' · '+v+'</div></div>';
-  const row=p=>{const ini=p.hn.split(" ").map(w=>w[0]).join("").slice(0,2);
-    return '<tr><td><span class="hero"><span class="av">'+esc(ini)+'</span><span class="nm">'+esc(p.hn)+'</span></span></td>'+
-    '<td class="pl">'+esc(p.nm)+'</td><td>'+(p.level||"–")+'</td>'+
-    '<td>'+(p.kills||0)+'/'+(p.deaths||0)+'/'+(p.assists||0)+'</td>'+
-    '<td class="'+(p===bl?"mx":"")+'">'+(p.last_hits||0)+'</td>'+
-    '<td class="'+(p===bd?"mx":"")+'">'+(p.denies||0)+'</td>'+
-    '<td>'+(p.gold_per_min||0)+'</td><td>'+(p.xp_per_min||0)+'</td>'+
-    '<td>'+(p.net_worth!=null?p.net_worth.toLocaleString("ru-RU"):"–")+'</td>'+
-    '<td class="'+(p===bh?"mx":"")+'">'+(p.hero_damage!=null?p.hero_damage.toLocaleString("ru-RU"):"–")+'</td></tr>'};
-  const team=(rad)=>{const w=m.radiant_win===rad;
-    return '<div class="team"><div class="th"><span>'+(rad?"СИЛЫ СВЕТА":"СИЛЫ ТЬМЫ")+'</span><span class="'+(w?"win":"lose")+'">'+(w?"ПОБЕДА":"ПОРАЖЕНИЕ")+' · '+(rad?m.radiant_score:m.dire_score)+'</span></div>'+
-    '<div class="sc"><table class="mt"><tr><th>Герой</th><th>Игрок</th><th>Ур.</th><th>K/D/A</th><th>LH</th><th>DN</th><th>GPM</th><th>XPM</th><th>Net</th><th>Урон</th></tr>'+
-    P.filter(p=>p.rad===rad).map(row).join("")+'</table></div></div>'};
-  $("mres").innerHTML=
-   '<div class="top"><div class="card"><div class="k">Матч '+esc(m.match_id)+'</div><div class="v '+(m.radiant_win?"win":"lose")+'">'+(m.radiant_win?"Победил Свет":"Победила Тьма")+'</div>'+
-   '<div class="s">'+m.radiant_score+' : '+m.dire_score+' · '+mmss(m.duration)+'</div><div class="s">'+esc(MODES[m.game_mode]||("Режим "+m.game_mode))+' · '+new Date(m.start_time*1000).toLocaleString("ru-RU")+'</div></div>'+
-   card("Больше всего убийств",bk,(bk.kills||0)+" kills")+card("Больше всего добитых крипов",bl,(bl.last_hits||0)+" LH")+
-   card("Больше всего денаев",bd,(bd.denies||0)+" DN")+card("Больше всего урона",bh,(bh.hero_damage||0).toLocaleString("ru-RU"))+'</div>'+
-   team(true)+team(false)+
-   '<div class="note">LH — добитые крипы, DN — денаи, GPM/XPM — золото и опыт в минуту, Net — чистая стоимость. Данные: OpenDota. У свежих или непарсенных матчей часть полей может быть пустой.</div>';
+  const card=(t,p,v)=>(p[v[0]]||0)>0?'<div class="card"><div class="k">'+t+'</div><div class="v">'+esc(p.hn)+'</div><div class="s">'+esc(p.nm)+' · '+fmt(p[v[0]])+' '+v[1]+'</div></div>':"";
+  const av=p=>{const ini=p.hn.split(" ").map(w=>w[0]).join("").slice(0,2);return '<span class="av">'+esc(ini)+(HN[p.hero_id]?'<img alt="" src="https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/'+esc(HN[p.hero_id])+'.png" onerror="this.remove()">':"")+'</span>'};
+  const row=p=>'<tr class="rw" onclick="this.nextElementSibling.classList.toggle(\'open\')"><td><span class="hero">'+av(p)+'<span class="nm">'+esc(p.hn)+'</span></span></td><td class="pl">'+esc(p.nm)+'</td><td>'+(p.level||"–")+'</td>'+
+    '<td>'+(p.kills||0)+'/'+(p.deaths||0)+'/'+(p.assists||0)+'</td><td class="'+(p===bl?"mx":"")+'">'+(p.last_hits||0)+'</td><td class="'+(p===bd?"mx":"")+'">'+(p.denies||0)+'</td>'+
+    '<td>'+fmt(p.gold_per_min)+'</td><td>'+fmt(p.xp_per_min)+'</td><td>'+fmt(p.net_worth)+'</td><td class="'+(p===bh?"mx":"")+'">'+fmt(p.hero_damage)+'</td>'+
+    '<td class="itc">'+[0,1,2,3,4,5].map(i=>itemImg(p["item_"+i])).join("")+(p.item_neutral?itemImg(p.item_neutral):"")+'</td></tr>'+
+    '<tr class="dt"><td colspan="11"><div class="dg">'+[["Урон по строениям",p.tower_damage],["Лечение",p.hero_healing],["Оглушение, с",p.stuns],["Варды обс. / сентри",(p.obs_placed||0)+" / "+(p.sen_placed||0)],["Золото потрачено",p.gold_spent],["Выкупы",p.buyback_count]].map(x=>'<div><div class="k">'+x[0]+'</div><b>'+fmt(x[1])+'</b></div>').join("")+(p.gold_t?'<div><div class="k">Золото по минутам</div>'+spark(p.gold_t,"#7fd6ff")+'</div>':"")+'</div></td></tr>';
+  const team=rad=>{const w=m.radiant_win===rad;
+    return '<div class="team"><div class="th"><span>'+(rad?"СИЛЫ СВЕТА":"СИЛЫ ТЬМЫ")+'</span><span class="'+(w?"win":"lose")+'">'+(w?"ПОБЕДА":"ПОРАЖЕНИЕ")+' · '+(rad?m.radiant_score:m.dire_score)+'</span></div><div class="sc"><table class="mt" style="min-width:860px"><tr><th>Герой</th><th>Игрок</th><th>Ур.</th><th>K/D/A</th><th>LH</th><th>DN</th><th>GPM</th><th>XPM</th><th>Net</th><th>Урон</th><th>Предметы</th></tr>'+P.filter(p=>p.rad===rad).map(row).join("")+'</table></div></div>'};
+  $("mres").innerHTML='<div class="top"><div class="card"><div class="k">Матч '+esc(m.match_id)+'</div><div class="v '+(m.radiant_win?"win":"lose")+'">'+(m.radiant_win?"Победил Свет":"Победила Тьма")+'</div><div class="s">'+m.radiant_score+' : '+m.dire_score+' · '+mmss(m.duration)+'</div><div class="s">'+esc(MODES[m.game_mode]||("Режим "+m.game_mode))+' · '+new Date(m.start_time*1000).toLocaleString("ru-RU")+'</div></div>'+
+    card("Больше всего убийств",bk,["kills","kills"])+card("Больше всего добитых крипов",bl,["last_hits","LH"])+card("Больше всего денаев",bd,["denies","DN"])+card("Больше всего урона",bh,["hero_damage","урона"])+
+    card("Больше всего лечения",best("hero_healing"),["hero_healing","лечения"])+card("Больше урона по строениям",best("tower_damage"),["tower_damage","урона"])+card("Больше всего вардов",best("obs_placed"),["obs_placed","обс."])+'</div>'+
+    '<div class="sec"><div class="label">Ход матча</div><div class="tabs"><button class="tab on" id="cg" onclick="drawChart(\'g\')">Золото</button><button class="tab" id="cx" onclick="drawChart(\'x\')">Опыт</button></div><div class="cbox" id="chartbox"></div></div>'+
+    (EV.length?'<div class="sec"><div class="label">События матча</div><div class="ev">'+EV.map(e=>'<div class="er"><span class="et">'+mmss(Math.max(0,e.t))+'</span><span class="dot '+(e.rad?"dr":"dd")+'"></span>'+esc(e.txt)+'</div>').join("")+'</div></div>':"")+
+    '<div class="sec"><div class="label">Игроки · нажмите на строку, чтобы раскрыть детали</div>'+team(true)+team(false)+'</div>'+
+    '<div class="note">LH — добитые крипы, DN — денаи, GPM/XPM — золото и опыт в минуту, Net — чистая стоимость. Зелёная точка в событиях — выгода Света, красная — Тьмы. Данные: OpenDota; у неразобранных матчей часть полей пустая.</div>';
+  drawChart("g");
 }
 document.addEventListener("DOMContentLoaded",()=>{$("mid").addEventListener("keydown",e=>{if(e.key==="Enter")findMatch()})});
 </script>
