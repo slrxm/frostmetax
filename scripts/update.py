@@ -5,8 +5,8 @@ TOKEN = os.environ["STRATZ_TOKEN"]
 URL = "https://api.stratz.com/graphql"
 OUT = pathlib.Path(__file__).resolve().parent.parent / "data.json"
 MIN_GAMES = 100
-BRACKETS = [("HERALD_GUARDIAN", "Herald–Guardian"), ("CRUSADER_ARCHON", "Crusader–Archon"),
-            ("LEGEND_ANCIENT", "Legend–Ancient"), ("DIVINE_IMMORTAL", "Divine–Immortal")]
+BRACKETS = [("HERALD,GUARDIAN", "Herald–Guardian"), ("CRUSADER,ARCHON", "Crusader–Archon"),
+            ("LEGEND,ANCIENT", "Legend–Ancient"), ("DIVINE", "Divine"), ("IMMORTAL", "Immortal")]
 POSITIONS = [("POSITION_1", "Pos 1 · Carry"), ("POSITION_2", "Pos 2 · Mid"), ("POSITION_3", "Pos 3 · Offlane"),
              ("POSITION_4", "Pos 4 · Soft Support"), ("POSITION_5", "Pos 5 · Hard Support")]
 
@@ -36,7 +36,7 @@ if OUT.exists():
 data = {}
 for bi, (b, _) in enumerate(BRACKETS):
     for pi, (p, _) in enumerate(POSITIONS):
-        rows = gql("{heroStats{winWeek(take:1,bracketBasicIds:[%s],positionIds:[%s]){heroId matchCount winCount}}}"
+        rows = gql("{heroStats{winWeek(take:1,bracketIds:[%s],positionIds:[%s]){heroId matchCount winCount}}}"
                    % (b, p))["heroStats"]["winWeek"]
         agg = {}
         for r in rows:
