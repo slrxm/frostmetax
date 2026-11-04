@@ -13,7 +13,7 @@ POSITIONS = [("POSITION_1", "Pos 1 · Carry"), ("POSITION_2", "Pos 2 · Mid"), (
 
 
 def gql(query):
-    """Запрос к STRATZ с повторами при временных ошибках (429, 5xx, сеть)."""
+    """Запрос к STRATZ с повторами при временных ошибках (403, 429, 5xx, сеть)."""
     body = json.dumps({"query": query}).encode()
     headers = {"Content-Type": "application/json", "Authorization": "Bearer " + TOKEN,
                "User-Agent": "STRATZ_API"}
@@ -29,7 +29,7 @@ def gql(query):
         except urllib.error.HTTPError as e:
             text = e.read().decode("utf-8", "replace")[:600]
             last = "HTTP %s: %s" % (e.code, text)
-                       if e.code not in (403, 429, 500, 502, 503, 504):
+            if e.code not in (403, 429, 500, 502, 503, 504):
                 raise RuntimeError(last + "\nQUERY: " + query)
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
             last = "network: %s" % e
@@ -70,7 +70,8 @@ for bi, (b, _) in enumerate(BRACKETS):
         agg = {}
         for r in rows:
             a = agg.setdefault(r["heroId"], [0, 0])
-            a[0] += r["matchCount"]; a[1] += r["winCount"]
+            a[0] += r["matchCount"]
+            a[1] += r["winCount"]
         total = sum(m for m, _ in agg.values()) or 1
         out = []
         for hid, (m, w) in agg.items():
