@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FROSTMETA — мета Dota 2</title>
+<meta name="theme-color" content="#05080d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FROSTMETA">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+
 <style>
 :root{color-scheme:dark;--bg:#05080d;--panel:#0b121c;--panel2:#101a28;--line:#1b2c42;--ice:#7fd6ff;--ice2:#c9f1ff;--txt:#e6f4ff;--mut:#7c94ab;--up:#5be3b0;--dn:#ff6b87;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -416,6 +423,13 @@ function renderCmp(A,B,H){
    '<div class="sec"><div class="label">Любимые герои</div><div class="two"><div class="team"><div class="th"><span>'+nm(A)+'</span></div>'+top(A)+'</div><div class="team"><div class="th"><span>'+nm(B)+'</span></div>'+top(B)+'</div></div></div>'+cm+'<div class="sec"><div class="label">Встречи между игроками</div>'+tg+'</div>';
 }
 document.addEventListener("DOMContentLoaded",()=>{$("mid").addEventListener("keydown",e=>{if(e.key==="Enter")findMatch()});$("pid").addEventListener("keydown",e=>{if(e.key==="Enter")findPlayer()});["ca","cb"].forEach(i=>$(i).addEventListener("keydown",e=>{if(e.key==="Enter")compare()}))});
+</script>
+<script>
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(err => console.warn("PWA service worker:", err));
+  });
+}
 </script>
 </body>
 </html>
