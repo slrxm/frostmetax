@@ -84,6 +84,23 @@ tr.dt{display:none}tr.dt.open{display:table-row}tr.dt td{background:#080e16;text
 .et{width:46px;color:var(--mut);font-variant-numeric:tabular-nums}
 .dot{flex:none;width:9px;height:9px;border-radius:50%}.dr{background:var(--up)}.dd{background:var(--dn)}
 .cbox{margin-top:8px;border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:12px}
+
+.pn{color:#fff;font-weight:700;font-size:14px;text-shadow:0 0 14px #7fd6ff66}
+.card .v.pn{color:#fff}
+.who{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.hn{font-size:12px;color:var(--mut);font-weight:400;text-shadow:none}
+.mt th:nth-child(2),.mt td:nth-child(2){text-align:right}
+.bp{padding:10px 14px;border-top:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#0f1d2e;border:1px solid var(--line);border-radius:8px;padding:3px 9px 3px 3px;font-size:12px;color:var(--txt)}
+.chip .it{margin:0;width:34px;height:25px}
+.chip b{color:var(--ice);font-variant-numeric:tabular-nums}
+.phead{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:18px}
+.pav{width:72px;height:72px;border-radius:14px;border:1px solid var(--ice);box-shadow:0 0 22px #7fd6ff40}
+.pname{font-size:26px;font-weight:800;color:#fff;text-shadow:0 0 18px #7fd6ff80}
+.pst{margin-left:auto;text-align:right}
+.pick{cursor:pointer;transition:.15s}.pick:hover{border-color:var(--ice);box-shadow:0 0 18px #7fd6ff30}
+.phead a{color:var(--ice)}
 </style>
 </head>
 <body>
@@ -96,6 +113,7 @@ tr.dt{display:none}tr.dt.open{display:table-row}tr.dt td{background:#080e16;text
 <div class="tabs nav">
 <button class="tab on" id="nv0" onclick="view(0)">Мета героев</button>
 <button class="tab" id="nv1" onclick="view(1)">Поиск матча</button>
+<button class="tab" id="nv2" onclick="view(2)">Игрок</button>
 </div>
 <div id="metaView">
 <div class="label">Рейтинг</div>
@@ -123,6 +141,14 @@ tr.dt{display:none}tr.dt.open{display:table-row}tr.dt td{background:#080e16;text
 <button class="btn" onclick="findMatch()">Найти</button>
 </div>
 <div id="mres"><div class="msg">Введите ID матча из клиента Dota 2 или с сайта Dotabuff / OpenDota.</div></div>
+</div>
+<div id="playerView" style="display:none">
+<div class="label">Steam ID, ссылка на профиль или ник</div>
+<div class="mbar">
+<input id="pid" placeholder="Например: 123456789 или ник игрока" autocomplete="off">
+<button class="btn" onclick="findPlayer()">Найти</button>
+</div>
+<div id="pres"><div class="msg">Подойдёт числовой Steam ID (32 или 64 бита), ссылка Dotabuff / OpenDota / Steam или ник. Профиль должен открывать историю матчей.</div></div>
 </div>
 
 </div>
@@ -155,7 +181,7 @@ fetch("data.json",{cache:"no-cache"}).then(r=>r.json()).then(j=>{DB=j;
  $("note").textContent=j.demo?"⚠ Демонстрационные данные. После первого запуска обновления здесь появится реальная статистика.":"Данные: STRATZ · обновлено "+j.updated+" · тренд — изменение винрейта к прошлому обновлению";
  render()}).catch(()=>{$("list").innerHTML='<div class="empty">Не удалось загрузить data.json. Откройте сайт через хостинг (GitHub Pages), а не как файл.</div>'});
 
-function view(i){$("metaView").style.display=i?"none":"";$("matchView").style.display=i?"":"none";$("nv0").className="tab"+(i?"":" on");$("nv1").className="tab"+(i?" on":"")}
+function view(i){["metaView","matchView","playerView"].forEach((v,j)=>$(v).style.display=i===j?"":"none");[0,1,2].forEach(j=>$("nv"+j).className="tab"+(i===j?" on":""))}
 const API="https://api.opendota.com/api/";
 const MODES={1:"All Pick",2:"Captains Mode",3:"Random Draft",4:"Single Draft",5:"All Random",16:"Captains Draft",18:"Ability Draft",22:"All Pick",23:"Turbo"};
 let HEROES=null;
@@ -169,7 +195,7 @@ async function findMatch(){
   if(!id){msg("Введите числовой ID матча");return}
   msg("Загружаю матч…");
   try{
-    const [H,I,r]=await Promise.all([loadHeroes(),loadItems(),fetch(API+"matches/"+id)]);
+    const [H,I,C,r]=await Promise.all([loadHeroes(),loadItems(),loadItemC(),fetch(API+"matches/"+id)]);
     if(r.status===404){msg("Матч не найден. Проверьте ID: возможно, он слишком старый или ещё не попал в базу.");return}
     if(!r.ok)throw new Error(r.status);
     const m=await r.json();
@@ -215,25 +241,78 @@ function showMatch(m,H){
   CUR=m;EV=buildEvents(m,P);
   const best=k=>P.reduce((a,b)=>(b[k]||0)>(a[k]||0)?b:a,P[0]);
   const bk=best("kills"),bl=best("last_hits"),bd=best("denies"),bh=best("hero_damage");
-  const card=(t,p,v)=>(p[v[0]]||0)>0?'<div class="card"><div class="k">'+t+'</div><div class="v">'+esc(p.hn)+'</div><div class="s">'+esc(p.nm)+' · '+fmt(p[v[0]])+' '+v[1]+'</div></div>':"";
+  const card=(t,p,v)=>(p[v[0]]||0)>0?'<div class="card"><div class="k">'+t+'</div><div class="v pn">'+esc(p.nm)+'</div><div class="s">'+esc(p.hn)+' · '+fmt(p[v[0]])+' '+v[1]+'</div></div>':"";
   const av=p=>{const ini=p.hn.split(" ").map(w=>w[0]).join("").slice(0,2);return '<span class="av">'+esc(ini)+(HN[p.hero_id]?'<img alt="" src="https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/'+esc(HN[p.hero_id])+'.png" onerror="this.remove()">':"")+'</span>'};
-  const row=p=>'<tr class="rw" onclick="this.nextElementSibling.classList.toggle(\'open\')"><td><span class="hero">'+av(p)+'<span class="nm">'+esc(p.hn)+'</span></span></td><td class="pl">'+esc(p.nm)+'</td><td>'+(p.level||"–")+'</td>'+
+  const row=p=>'<tr class="rw" onclick="this.nextElementSibling.classList.toggle(\'open\')"><td><span class="hero">'+av(p)+'<span class="who"><span class="pn">'+esc(p.nm)+'</span><span class="hn">'+esc(p.hn)+'</span></span></span></td><td>'+(p.level||"–")+'</td>'+
     '<td>'+(p.kills||0)+'/'+(p.deaths||0)+'/'+(p.assists||0)+'</td><td class="'+(p===bl?"mx":"")+'">'+(p.last_hits||0)+'</td><td class="'+(p===bd?"mx":"")+'">'+(p.denies||0)+'</td>'+
     '<td>'+fmt(p.gold_per_min)+'</td><td>'+fmt(p.xp_per_min)+'</td><td>'+fmt(p.net_worth)+'</td><td class="'+(p===bh?"mx":"")+'">'+fmt(p.hero_damage)+'</td>'+
     '<td class="itc">'+[0,1,2,3,4,5].map(i=>itemImg(p["item_"+i])).join("")+(p.item_neutral?itemImg(p.item_neutral):"")+'</td></tr>'+
-    '<tr class="dt"><td colspan="11"><div class="dg">'+[["Урон по строениям",p.tower_damage],["Лечение",p.hero_healing],["Оглушение, с",p.stuns],["Варды обс. / сентри",(p.obs_placed||0)+" / "+(p.sen_placed||0)],["Золото потрачено",p.gold_spent],["Выкупы",p.buyback_count]].map(x=>'<div><div class="k">'+x[0]+'</div><b>'+fmt(x[1])+'</b></div>').join("")+(p.gold_t?'<div><div class="k">Золото по минутам</div>'+spark(p.gold_t,"#7fd6ff")+'</div>':"")+'</div></td></tr>';
+    '<tr class="dt"><td colspan="10"><div class="dg">'+[["Урон по строениям",p.tower_damage],["Лечение",p.hero_healing],["Оглушение, с",p.stuns],["Варды обс. / сентри",(p.obs_placed||0)+" / "+(p.sen_placed||0)],["Золото потрачено",p.gold_spent],["Выкупы",p.buyback_count]].map(x=>'<div><div class="k">'+x[0]+'</div><b>'+fmt(x[1])+'</b></div>').join("")+(p.gold_t?'<div><div class="k">Золото по минутам</div>'+spark(p.gold_t,"#7fd6ff")+'</div>':"")+'</div></td></tr>';
   const team=rad=>{const w=m.radiant_win===rad;
-    return '<div class="team"><div class="th"><span>'+(rad?"СИЛЫ СВЕТА":"СИЛЫ ТЬМЫ")+'</span><span class="'+(w?"win":"lose")+'">'+(w?"ПОБЕДА":"ПОРАЖЕНИЕ")+' · '+(rad?m.radiant_score:m.dire_score)+'</span></div><div class="sc"><table class="mt" style="min-width:860px"><tr><th>Герой</th><th>Игрок</th><th>Ур.</th><th>K/D/A</th><th>LH</th><th>DN</th><th>GPM</th><th>XPM</th><th>Net</th><th>Урон</th><th>Предметы</th></tr>'+P.filter(p=>p.rad===rad).map(row).join("")+'</table></div></div>'};
+    return '<div class="team"><div class="th"><span>'+(rad?"СИЛЫ СВЕТА":"СИЛЫ ТЬМЫ")+'</span><span class="'+(w?"win":"lose")+'">'+(w?"ПОБЕДА":"ПОРАЖЕНИЕ")+' · '+(rad?m.radiant_score:m.dire_score)+'</span></div><div class="sc"><table class="mt" style="min-width:860px"><tr><th>Игрок</th><th>Ур.</th><th>K/D/A</th><th>LH</th><th>DN</th><th>GPM</th><th>XPM</th><th>Net</th><th>Урон</th><th>Предметы</th></tr>'+P.filter(p=>p.rad===rad).map(row).join("")+'</table></div></div>'};
   $("mres").innerHTML='<div class="top"><div class="card"><div class="k">Матч '+esc(m.match_id)+'</div><div class="v '+(m.radiant_win?"win":"lose")+'">'+(m.radiant_win?"Победил Свет":"Победила Тьма")+'</div><div class="s">'+m.radiant_score+' : '+m.dire_score+' · '+mmss(m.duration)+'</div><div class="s">'+esc(MODES[m.game_mode]||("Режим "+m.game_mode))+' · '+new Date(m.start_time*1000).toLocaleString("ru-RU")+'</div></div>'+
     card("Больше всего убийств",bk,["kills","kills"])+card("Больше всего добитых крипов",bl,["last_hits","LH"])+card("Больше всего денаев",bd,["denies","DN"])+card("Больше всего урона",bh,["hero_damage","урона"])+
     card("Больше всего лечения",best("hero_healing"),["hero_healing","лечения"])+card("Больше урона по строениям",best("tower_damage"),["tower_damage","урона"])+card("Больше всего вардов",best("obs_placed"),["obs_placed","обс."])+'</div>'+
     '<div class="sec"><div class="label">Ход матча</div><div class="tabs"><button class="tab on" id="cg" onclick="drawChart(\'g\')">Золото</button><button class="tab" id="cx" onclick="drawChart(\'x\')">Опыт</button></div><div class="cbox" id="chartbox"></div></div>'+
     (EV.length?'<div class="sec"><div class="label">События матча</div><div class="ev">'+EV.map(e=>'<div class="er"><span class="et">'+mmss(Math.max(0,e.t))+'</span><span class="dot '+(e.rad?"dr":"dd")+'"></span>'+esc(e.txt)+'</div>').join("")+'</div></div>':"")+
-    '<div class="sec"><div class="label">Игроки · нажмите на строку, чтобы раскрыть детали</div>'+team(true)+team(false)+'</div>'+
+    buildSec(P)+'<div class="sec"><div class="label">Игроки · нажмите на строку, чтобы раскрыть детали</div>'+team(true)+team(false)+'</div>'+
     '<div class="note">LH — добитые крипы, DN — денаи, GPM/XPM — золото и опыт в минуту, Net — чистая стоимость. Зелёная точка в событиях — выгода Света, красная — Тьмы. Данные: OpenDota; у неразобранных матчей часть полей пустая.</div>';
   drawChart("g");
 }
-document.addEventListener("DOMContentLoaded",()=>{$("mid").addEventListener("keydown",e=>{if(e.key==="Enter")findMatch()})});
+
+const RK=["","Herald","Guardian","Crusader","Archon","Legend","Ancient","Divine","Immortal"];
+function rankTxt(t){if(!t)return"ранг неизвестен";const a=Math.floor(t/10),b=t%10;return (RK[a]||"?")+(a<8&&b?" "+b:"")}
+function pmsg(t){$("pres").innerHTML='<div class="msg">'+esc(t)+'</div>'}
+function avId(id,n){const ini=n.split(" ").map(w=>w[0]).join("").slice(0,2);return '<span class="av">'+esc(ini)+(HN[id]?'<img alt="" src="https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/'+esc(HN[id])+'.png" onerror="this.remove()">':"")+'</span>'}
+function parseId(t){t=t.trim();const m=t.match(/profiles\/(\d{15,})/)||t.match(/players\/(\d+)/);if(m)t=m[1];
+  if(/^\d+$/.test(t)){let n=BigInt(t);if(n>76561197960265728n)n-=76561197960265728n;return String(n)}
+  if(/steamcommunity\.com\/id\//.test(t))return"vanity";return null}
+function openMatch(id){view(1);$("mid").value=id;findMatch()}
+async function findPlayer(){
+  const t=$("pid").value;if(!t.trim()){pmsg("Введите Steam ID, ссылку на профиль или ник");return}
+  const id=parseId(t);
+  if(id==="vanity"){pmsg("Короткие ссылки steamcommunity.com/id/… не поддерживаются. Используйте числовой ID или введите ник.");return}
+  if(id)return loadPlayer(id);
+  pmsg("Ищу игрока…");
+  try{const r=await (await fetch(API+"search?q="+encodeURIComponent(t.trim()))).json();
+    if(!r||!r.length){pmsg("Никого не найдено. Попробуйте числовой ID.");return}
+    $("pres").innerHTML='<div class="label">Найдено по нику — выберите игрока</div><div class="top">'+r.slice(0,9).map(x=>'<div class="card pick" onclick="loadPlayer(\''+esc(x.account_id)+'\')"><div class="v pn">'+esc(x.personaname)+'</div><div class="s">ID '+esc(x.account_id)+'</div></div>').join("")+'</div>'
+  }catch(e){pmsg("Не удалось выполнить поиск. Попробуйте позже.")}
+}
+async function loadPlayer(id){
+  pmsg("Загружаю профиль…");
+  try{
+    const H=await loadHeroes();
+    const g=u=>fetch(API+"players/"+id+u).then(r=>r.ok?r.json():null).catch(()=>null);
+    const [pr,wl,rm,hs]=await Promise.all([g(""),g("/wl"),g("/recentMatches"),g("/heroes")]);
+    if(!pr||!pr.profile){pmsg("Профиль не найден. Проверьте ID.");return}
+    const pf=pr.profile,win=wl?wl.win:0,lose=wl?wl.lose:0,tot=win+lose,wrp=tot?(win/tot*100).toFixed(1):"–";
+    const url=pf.profileurl&&/^https:\/\/steamcommunity\.com\//.test(pf.profileurl)?pf.profileurl:null;
+    const th=(hs||[]).filter(x=>x.games>0).slice(0,8);
+    const rr=(rm||[]).map(x=>{const n=H[x.hero_id]||("Hero "+x.hero_id),w=(x.player_slot<128)===x.radiant_win;
+      return '<tr class="rw" onclick="openMatch(\''+esc(x.match_id)+'\')"><td><span class="hero">'+avId(x.hero_id,n)+'<span class="pn">'+esc(n)+'</span></span></td><td class="'+(w?"win":"lose")+'">'+(w?"Победа":"Поражение")+'</td><td>'+x.kills+'/'+x.deaths+'/'+x.assists+'</td><td>'+mmss(x.duration)+'</td><td>'+esc(MODES[x.game_mode]||("Режим "+x.game_mode))+'</td><td>'+new Date(x.start_time*1000).toLocaleDateString("ru-RU")+'</td></tr>'}).join("");
+    $("pres").innerHTML='<div class="card phead">'+(pf.avatarfull?'<img class="pav" alt="" src="'+esc(pf.avatarfull)+'" onerror="this.remove()">':"")+'<div><div class="pname">'+esc(pf.personaname||"Аноним")+'</div><div class="s">ID '+esc(id)+' · '+esc(rankTxt(pr.rank_tier))+(url?' · <a href="'+esc(url)+'" target="_blank" rel="noopener">Steam</a>':"")+'</div></div><div class="pst"><div class="k">Победы / поражения</div><div class="v"><span class="win">'+win+'</span> / <span class="lose">'+lose+'</span></div><div class="s">Винрейт '+wrp+'%</div></div></div>'+
+    (th.length?'<div class="sec"><div class="label">Любимые герои</div><div class="team"><div class="sc"><table class="mt" style="min-width:420px"><tr><th>Герой</th><th>Игры</th><th>Победы</th><th>Винрейт</th></tr>'+th.map(x=>{const n=H[x.hero_id]||("Hero "+x.hero_id);return '<tr><td><span class="hero">'+avId(x.hero_id,n)+'<span class="pn">'+esc(n)+'</span></span></td><td>'+x.games+'</td><td>'+x.win+'</td><td>'+(x.win/x.games*100).toFixed(1)+'%</td></tr>'}).join("")+'</table></div></div></div>':"")+
+    '<div class="sec"><div class="label">Последние матчи · нажмите, чтобы открыть разбор</div>'+(rr?'<div class="team"><div class="sc"><table class="mt" style="min-width:520px"><tr><th>Герой</th><th>Итог</th><th>K/D/A</th><th>Время</th><th>Режим</th><th>Дата</th></tr>'+rr+'</table></div></div>':'<div class="msg">История матчей скрыта настройками профиля (Expose Public Match Data) или пуста.</div>')+'</div>';
+  }catch(e){pmsg("Не удалось загрузить профиль. Попробуйте через минуту: у OpenDota есть лимит запросов.")}
+}
+let ICONS=null;
+async function loadItemC(){if(ICONS)return ICONS;try{ICONS=await (await fetch(API+"constants/items")).json()}catch(e){ICONS={}}return ICONS}
+function buildTimes(p){
+  const C=ICONS||{},log=p.purchase_log||[],first={},seen={},out=[];
+  const ok=k=>{const c=C[k];return c&&c.components&&c.cost>=1000&&!/^recipe_/.test(k)};
+  log.forEach(x=>{if(first[x.key]==null)first[x.key]=x.time;if(ok(x.key)){out.push({k:x.key,t:x.time});seen[x.key]=1}});
+  const tm=(k,d)=>{if(first[k]!=null)return first[k];const c=C[k];if(!c||!c.components||d>4)return null;const ts=c.components.concat(["recipe_"+k]).map(x=>tm(x,d+1)).filter(n=>n!=null);return ts.length?Math.max(...ts):null};
+  [0,1,2,3,4,5].forEach(i=>{const k=ITEMS&&ITEMS[p["item_"+i]];if(!k||seen[k]||!ok(k))return;const t=tm(k,0);if(t!=null){out.push({k,t,est:1});seen[k]=1}});
+  return out.sort((a,b)=>a.t-b.t)
+}
+function buildSec(P){
+  if(!P.some(p=>p.purchase_log&&p.purchase_log.length))return '<div class="sec"><div class="label">Сборка предметов</div><div class="msg">Нужен разобранный матч: у OpenDota пока нет журнала покупок.</div></div>';
+  const chip=x=>{const c=ICONS[x.k]||{};return '<span class="chip"><img class="it" alt="" src="https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/items/'+esc(x.k)+'.png" onerror="this.style.visibility=\'hidden\'">'+esc(c.dname||x.k.replace(/_/g," "))+' <b>'+(x.est?"~":"")+mmss(Math.max(0,x.t))+'</b></span>'};
+  const one=p=>{const l=buildTimes(p);return '<div class="bp"><div><span class="pn">'+esc(p.nm)+'</span> <span class="hn">'+esc(p.hn)+'</span></div><div class="chips">'+(l.length?l.map(chip).join(""):'<span class="hn">нет крупных предметов</span>')+'</div></div>'};
+  return '<div class="sec"><div class="label">Сборка предметов · время появления</div>'+[true,false].map(r=>'<div class="team"><div class="th"><span>'+(r?"СИЛЫ СВЕТА":"СИЛЫ ТЬМЫ")+'</span></div>'+P.filter(p=>p.rad===r).map(one).join("")+'</div>').join("")+'<div class="s" style="margin-top:8px">Показаны собранные предметы дороже 1000 золота. «~» — время приблизительное (по последней купленной части).</div></div>'
+}
+document.addEventListener("DOMContentLoaded",()=>{$("mid").addEventListener("keydown",e=>{if(e.key==="Enter")findMatch()});$("pid").addEventListener("keydown",e=>{if(e.key==="Enter")findPlayer()})});
 </script>
 </body>
 </html>
