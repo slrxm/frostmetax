@@ -29,7 +29,7 @@ def gql(query):
         except urllib.error.HTTPError as e:
             text = e.read().decode("utf-8", "replace")[:600]
             last = "HTTP %s: %s" % (e.code, text)
-            if e.code not in (429, 500, 502, 503, 504):
+                       if e.code not in (403, 429, 500, 502, 503, 504):
                 raise RuntimeError(last + "\nQUERY: " + query)
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
             last = "network: %s" % e
