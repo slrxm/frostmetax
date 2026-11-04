@@ -50,15 +50,38 @@ input{flex:1;min-width:160px}input:focus,select:focus{border-color:var(--ice);bo
 .note{margin-top:18px;font-size:12px;color:var(--mut);text-align:center;line-height:1.5}
 .empty{padding:30px;text-align:center;color:var(--mut)}
 @media(max-width:640px){.row{grid-template-columns:36px 1fr 60px 56px;padding:10px}.row>:nth-child(3){grid-column:1/-1;order:5}.head>:nth-child(3){display:none}.head{grid-template-columns:36px 1fr 60px 56px}}
+
+.nav{display:flex;gap:8px;justify-content:center;margin-bottom:4px}
+.nav .tab{padding:11px 22px;font-size:15px}
+.mbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.btn{background:linear-gradient(180deg,var(--ice2),var(--ice));color:#03121c;border:0;border-radius:10px;padding:10px 20px;font:inherit;font-weight:700;cursor:pointer;box-shadow:0 0 22px #7fd6ff40}
+.btn:hover{filter:brightness(1.08)}
+.msg{margin-top:22px;text-align:center;color:var(--mut)}
+.team{margin-top:16px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}
+.th{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;background:#080e16;font-weight:700;letter-spacing:.08em;font-size:13px}
+.win{color:var(--up)}.lose{color:var(--dn)}
+.sc{overflow-x:auto}
+.mt{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+.mt th{font-size:10px;letter-spacing:.12em;color:var(--mut);text-transform:uppercase;text-align:right;padding:9px 8px;font-weight:600}
+.mt td{padding:9px 8px;border-top:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+.mt th:first-child,.mt td:first-child,.mt th:nth-child(2),.mt td:nth-child(2){text-align:left}
+.mt tr:hover td{background:#0f1d2e}
+.pl{color:var(--mut);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mx{color:var(--ice2);font-weight:700}
 </style>
 </head>
 <body>
 <div class="wrap">
 <header>
 <h1>FROSTMETA</h1>
-<div class="sub">МЕТА DOTA 2 · ПО РЕЙТИНГАМ И ПОЗИЦИЯМ</div>
+<div class="sub">МЕТА И СТАТИСТИКА МАТЧЕЙ DOTA 2</div>
 </header>
 
+<div class="tabs nav">
+<button class="tab on" id="nv0" onclick="view(0)">Мета героев</button>
+<button class="tab" id="nv1" onclick="view(1)">Поиск матча</button>
+</div>
+<div id="metaView">
 <div class="label">Рейтинг</div>
 <div class="tabs" id="ranks"></div>
 <div class="label">Позиция</div>
@@ -76,6 +99,16 @@ input{flex:1;min-width:160px}input:focus,select:focus{border-color:var(--ice);bo
 <div class="top" id="top"></div>
 <div class="list" id="list"></div>
 <div class="note" id="note"></div>
+</div>
+<div id="matchView" style="display:none">
+<div class="label">ID матча</div>
+<div class="mbar">
+<input id="mid" inputmode="numeric" placeholder="Например: 8012345678" autocomplete="off">
+<button class="btn" onclick="findMatch()">Найти</button>
+</div>
+<div id="mres"><div class="msg">Введите ID матча из клиента Dota 2 или с сайта Dotabuff / OpenDota.</div></div>
+</div>
+
 </div>
 
 <script>
@@ -105,6 +138,56 @@ $("q").oninput=render;$("sort").onchange=render;
 fetch("data.json",{cache:"no-cache"}).then(r=>r.json()).then(j=>{DB=j;
  $("note").textContent=j.demo?"⚠ Демонстрационные данные. После первого запуска обновления здесь появится реальная статистика.":"Данные: STRATZ · обновлено "+j.updated+" · тренд — изменение винрейта к прошлому обновлению";
  render()}).catch(()=>{$("list").innerHTML='<div class="empty">Не удалось загрузить data.json. Откройте сайт через хостинг (GitHub Pages), а не как файл.</div>'});
+
+function view(i){$("metaView").style.display=i?"none":"";$("matchView").style.display=i?"":"none";$("nv0").className="tab"+(i?"":" on");$("nv1").className="tab"+(i?" on":"")}
+const API="https://api.opendota.com/api/";
+const MODES={1:"All Pick",2:"Captains Mode",3:"Random Draft",4:"Single Draft",5:"All Random",16:"Captains Draft",18:"Ability Draft",22:"All Pick",23:"Turbo"};
+let HEROES=null;
+function esc(t){return String(t==null?"":t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function msg(t){$("mres").innerHTML='<div class="msg">'+esc(t)+'</div>'}
+async function loadHeroes(){if(HEROES)return HEROES;const j=await (await fetch(API+"heroes")).json();HEROES={};j.forEach(h=>HEROES[h.id]=h.localized_name);return HEROES}
+async function findMatch(){
+  const id=$("mid").value.replace(/\D/g,"");
+  if(!id){msg("Введите числовой ID матча");return}
+  msg("Загружаю матч…");
+  try{
+    const [H,r]=await Promise.all([loadHeroes(),fetch(API+"matches/"+id)]);
+    if(r.status===404){msg("Матч не найден. Проверьте ID: возможно, он слишком старый или ещё не попал в базу.");return}
+    if(!r.ok)throw new Error(r.status);
+    const m=await r.json();
+    if(!m||m.error||!m.players){msg("Данных по этому матчу нет.");return}
+    showMatch(m,H);
+  }catch(e){msg("Не удалось загрузить матч. Попробуйте через минуту: у OpenDota есть лимит запросов.")}
+}
+function mmss(s){return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")}
+function showMatch(m,H){
+  const P=m.players.map(p=>({...p,rad:p.isRadiant!==undefined?p.isRadiant:p.player_slot<128,
+    hn:H[p.hero_id]||("Hero "+p.hero_id),nm:p.personaname||p.name||"Аноним"}));
+  const best=(k)=>P.reduce((a,b)=>(b[k]||0)>(a[k]||0)?b:a,P[0]);
+  const bk=best("kills"),bl=best("last_hits"),bd=best("denies"),bh=best("hero_damage");
+  const card=(t,p,v)=>'<div class="card"><div class="k">'+t+'</div><div class="v">'+esc(p.hn)+'</div><div class="s">'+esc(p.nm)+' · '+v+'</div></div>';
+  const row=p=>{const ini=p.hn.split(" ").map(w=>w[0]).join("").slice(0,2);
+    return '<tr><td><span class="hero"><span class="av">'+esc(ini)+'</span><span class="nm">'+esc(p.hn)+'</span></span></td>'+
+    '<td class="pl">'+esc(p.nm)+'</td><td>'+(p.level||"–")+'</td>'+
+    '<td>'+(p.kills||0)+'/'+(p.deaths||0)+'/'+(p.assists||0)+'</td>'+
+    '<td class="'+(p===bl?"mx":"")+'">'+(p.last_hits||0)+'</td>'+
+    '<td class="'+(p===bd?"mx":"")+'">'+(p.denies||0)+'</td>'+
+    '<td>'+(p.gold_per_min||0)+'</td><td>'+(p.xp_per_min||0)+'</td>'+
+    '<td>'+(p.net_worth!=null?p.net_worth.toLocaleString("ru-RU"):"–")+'</td>'+
+    '<td class="'+(p===bh?"mx":"")+'">'+(p.hero_damage!=null?p.hero_damage.toLocaleString("ru-RU"):"–")+'</td></tr>'};
+  const team=(rad)=>{const w=m.radiant_win===rad;
+    return '<div class="team"><div class="th"><span>'+(rad?"СИЛЫ СВЕТА":"СИЛЫ ТЬМЫ")+'</span><span class="'+(w?"win":"lose")+'">'+(w?"ПОБЕДА":"ПОРАЖЕНИЕ")+' · '+(rad?m.radiant_score:m.dire_score)+'</span></div>'+
+    '<div class="sc"><table class="mt"><tr><th>Герой</th><th>Игрок</th><th>Ур.</th><th>K/D/A</th><th>LH</th><th>DN</th><th>GPM</th><th>XPM</th><th>Net</th><th>Урон</th></tr>'+
+    P.filter(p=>p.rad===rad).map(row).join("")+'</table></div></div>'};
+  $("mres").innerHTML=
+   '<div class="top"><div class="card"><div class="k">Матч '+esc(m.match_id)+'</div><div class="v '+(m.radiant_win?"win":"lose")+'">'+(m.radiant_win?"Победил Свет":"Победила Тьма")+'</div>'+
+   '<div class="s">'+m.radiant_score+' : '+m.dire_score+' · '+mmss(m.duration)+'</div><div class="s">'+esc(MODES[m.game_mode]||("Режим "+m.game_mode))+' · '+new Date(m.start_time*1000).toLocaleString("ru-RU")+'</div></div>'+
+   card("Больше всего убийств",bk,(bk.kills||0)+" kills")+card("Больше всего добитых крипов",bl,(bl.last_hits||0)+" LH")+
+   card("Больше всего денаев",bd,(bd.denies||0)+" DN")+card("Больше всего урона",bh,(bh.hero_damage||0).toLocaleString("ru-RU"))+'</div>'+
+   team(true)+team(false)+
+   '<div class="note">LH — добитые крипы, DN — денаи, GPM/XPM — золото и опыт в минуту, Net — чистая стоимость. Данные: OpenDota. У свежих или непарсенных матчей часть полей может быть пустой.</div>';
+}
+document.addEventListener("DOMContentLoaded",()=>{$("mid").addEventListener("keydown",e=>{if(e.key==="Enter")findMatch()})});
 </script>
 </body>
 </html>
