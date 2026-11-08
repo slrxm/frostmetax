@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 test("mobile layout, downloads, search and account availability", async ({
   page,
-}) => {
+}, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -25,7 +25,7 @@ test("mobile layout, downloads, search and account availability", async ({
   expect(width[0]).toBeLessThanOrEqual(width[1]);
   expect(errors).toEqual([]);
   await page.screenshot({
-    path: "/workspace/work/frostmeta-mobile.png",
+    path: testInfo.outputPath("frostmeta-mobile.png"),
     fullPage: true,
   });
 });
