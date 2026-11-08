@@ -1,14 +1,10 @@
 import { Capacitor } from "@capacitor/core";
-import { Browser } from "@capacitor/browser";
+import { initInsights } from "./hero-insights.mjs";
 import { App } from "@capacitor/app";
 const $ = (id) => document.getElementById(id),
   native = Capacitor.isNativePlatform();
 if (native) document.body.classList.add("native");
 let config = {},
-  user = null,
-  bearer = null,
-  pending = null,
-  googleConfigured = false,
   toastTimer;
 function toast(message) {
   $("toast").textContent = message;
@@ -23,23 +19,6 @@ function safeUrl(value) {
   } catch {
     return null;
   }
-}
-async function api(path, { method = "GET", body } = {}) {
-  if (native && !config.apiBase)
-    throw Error("Сервис авторизации ещё не подключён");
-  const r = await fetch((config.apiBase || "") + path, {
-    method,
-    credentials: native ? "omit" : "same-origin",
-    headers: {
-      ...(body ? { "Content-Type": "application/json" } : {}),
-      ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(20000),
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw Error(data.error || "Сервис временно недоступен");
-  return { data, status: r.status };
 }
 const el = (tag, text, cls) => {
   const n = document.createElement(tag);
@@ -62,153 +41,70 @@ function action(parent, label, fn, cls = "quiet") {
   parent.append(b);
   return b;
 }
-async function account() {
+async function me() {
   const box = $("accountPanel");
-  box.replaceChildren();
-  box.append(el("h2", user ? "Твой FROSTMETA" : "Твой профиль Dota 2"));
-  if (!user) {
-    box.append(
-      el(
-        "p",
-        "Войди через Google и привяжи Steam. Твой профиль и последние матчи будут под рукой.",
-      ),
-    );
-    const b = action(box, "Войти через Google", () => login("google"), "btn");
-    b.disabled = !googleConfigured;
-    if (!googleConfigured)
-      box.append(
-        el(
-          "p",
-          "Вход появится после подключения сервиса авторизации. Поиск игроков и матчей уже доступен без аккаунта.",
-          "small-note",
-        ),
-      );
-    return;
-  }
-  box.append(el("p", `${user.name} · ${user.email}`, "account-email"));
-  const row = el("div", null, "account-actions");
-  box.append(row);
-  if (user.accountId) {
-    box.append(el("p", `Steam привязан · Dota ID ${user.accountId}`));
-    action(
-      row,
-      "Открыть мой профиль Dota 2",
-      () => {
-        window.view(2);
-        $("pid").value = user.accountId;
-        window.loadPlayer(user.accountId);
-        box.hidden = true;
-      },
-      "btn",
-    );
-    action(row, "Отвязать Steam", async () => {
-      if (!confirm("Отвязать профиль Steam?")) return;
-      await api("/api/steam", { method: "DELETE" });
-      await me();
-    });
-  } else {
-    box.append(
-      el(
-        "p",
-        "Подтверди свой профиль на официальном сайте Steam. Пароль Steam в приложение не передаётся.",
-      ),
-    );
-    action(row, "Привязать Steam", () => login("steam"), "btn");
-  }
-  action(row, "Выйти", async () => {
-    await api("/api/logout", { method: "POST" });
-    bearer = null;
-    await me();
-  });
-  action(
-    row,
-    "Удалить аккаунт",
-    async () => {
-      if (
-        !confirm(
-          "Удалить аккаунт FROSTMETA и привязку Steam? Это действие необратимо.",
-        )
-      )
-        return;
-      await api("/api/account", { method: "DELETE" });
-      bearer = null;
-      await me();
-    },
-    "quiet danger",
-  );
+  box.replaceChildren(el("h2", "Мой профиль Dota 2"));
   box.append(
     el(
       "p",
-      "История матчей доступна, если в Dota 2 включена настройка «Общедоступная история матчей».",
+      "Сохрани Dota ID или числовую ссылку Steam на этом устройстве. Вход и подтверждение владения аккаунтом не требуются.",
+    ),
+  );
+  const input = el("input");
+  input.id = "localDotaId";
+  input.placeholder = "Dota ID или ссылка Steam /profiles/…";
+  input.setAttribute("aria-label", "Dota ID или ссылка Steam");
+  box.append(input);
+  let saved = null;
+  try {
+    saved = localStorage.getItem("frostmeta.dotaId");
+  } catch {}
+  if (saved) input.value = saved;
+  const valid = () => {
+    const id = window.parseId(input.value.trim());
+    if (!id || !/^[1-9]\d*$/.test(id) || BigInt(id) > 4294967295n)
+      throw Error(
+        "Введи Dota ID от 1 до 4294967295 или числовую ссылку Steam. Поиск по нику доступен во вкладке «Игрок».",
+      );
+    return id;
+  };
+  const actions = el("div", null, "account-actions");
+  box.append(actions);
+  action(
+    actions,
+    "Сохранить профиль",
+    async () => {
+      const id = valid();
+      localStorage.setItem("frostmeta.dotaId", id);
+      toast("Профиль сохранён на этом устройстве");
+    },
+    "btn",
+  );
+  action(actions, "Открыть статистику", async () => {
+    const id = valid();
+    window.view(2);
+    $("pid").value = id;
+    window.loadPlayer(id);
+    box.hidden = true;
+  });
+  action(actions, "Удалить сохранённый ID", async () => {
+    localStorage.removeItem("frostmeta.dotaId");
+    input.value = "";
+    toast("Сохранённый ID удалён");
+  });
+  box.append(
+    el(
+      "p",
+      "История матчей зависит от настройки публичности в Dota 2. Сохранённый ID не синхронизируется между устройствами.",
       "small-note",
     ),
   );
 }
-async function me() {
-  try {
-    const { data } = await api("/api/me");
-    user = data.user;
-    googleConfigured = data.googleConfigured;
-  } catch {
-    user = null;
-    googleConfigured = false;
-  }
-  $("accountButton").textContent = user ? "Мой профиль" : "Войти / мой профиль";
-  await account();
-}
-async function login(kind) {
-  if (native) {
-    const { data } = await api("/api/mobile/launch", {
-      method: "POST",
-      body: { kind },
-    });
-    pending = { ...data, expires: Date.now() + 600000 };
-    await Browser.open({ url: data.url });
-    startPoll();
-  } else location.assign((config.apiBase || "") + "/auth/" + kind);
-}
-let polling = false;
-async function poll() {
-  if (!pending || polling) return;
-  polling = true;
-  try {
-    if (Date.now() > pending.expires) {
-      pending = null;
-      toast("Время входа истекло. Повтори попытку.");
-      return;
-    }
-    const { data, status } = await api("/api/mobile/exchange", {
-      method: "POST",
-      body: { id: pending.id, secret: pending.secret },
-    });
-    if (status !== 202) {
-      bearer = data.token;
-      pending = null;
-      await Browser.close().catch(() => {});
-      await me();
-      toast("Профиль подключён");
-    }
-  } catch (e) {
-    pending = null;
-    toast(e.message);
-  } finally {
-    polling = false;
-  }
-}
-function startPoll() {
-  const timer = setInterval(() => {
-    if (!pending) clearInterval(timer);
-    else poll();
-  }, 2000);
-  poll();
-}
 if (native)
   App.addListener("appStateChange", ({ isActive }) => {
-    if (isActive) {
-      poll();
-      refreshMeta();
-    }
+    if (isActive) refreshMeta();
   });
+initInsights();
 $("accountButton").onclick = () => {
   $("accountPanel").hidden = !$("accountPanel").hidden;
 };
@@ -340,9 +236,7 @@ try {
   config = await r.json();
   if (config.apiBase) config.apiBase = config.apiBase.replace(/\/$/, "");
 } catch {}
-if (native && !config.apiBase) {
-  googleConfigured = false;
-}
+
 stores();
 await Promise.all([me(), refreshMeta()]);
 if (new URLSearchParams(location.search).has("account")) {

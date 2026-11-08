@@ -149,11 +149,11 @@ input:focus,select:focus{border-color:#bd7aff;box-shadow:0 0 0 3px #a855f733;}
 .pick:hover{border-color:#bd7aff;box-shadow:0 0 18px #a855f744;}
 @media(max-width:640px){.wrap{padding:22px 12px 44px}.brand-icon{width:66px;height:66px;border-radius:17px}.nav{justify-content:flex-start;overflow-x:auto;padding-bottom:5px}.nav .tab{white-space:nowrap;padding:10px 14px}}
 </style>
-<link rel="stylesheet" href="./app.css">
+<link rel="stylesheet" href="./app.css?v=4">
 </head>
 <body>
 <div class="wrap">
-<div class="utility"><button class="quiet download-trigger" id="downloadApp">↓ Скачать приложение</button><button class="quiet" id="accountButton">Войти / мой профиль</button></div>
+<div class="utility"><button class="quiet download-trigger" id="downloadApp">↓ Скачать приложение</button><button class="quiet" id="accountButton">Мой профиль</button></div>
 <section id="accountPanel" class="account-panel" hidden aria-live="polite"></section>
 <header>
 <img class="brand-icon" src="./icons/icon-192.png?v=3" alt="Логотип FROSTMETA">
@@ -219,6 +219,7 @@ input:focus,select:focus{border-color:#bd7aff;box-shadow:0 0 0 3px #a855f733;}
 let DB={ranks:[],roles:[],data:{}};
 window.applyMeta=function(j){DB=j; rank=Math.min(rank,DB.ranks.length-1);role=Math.min(role,DB.roles.length-1);render()};
 let rank=2,role=0;
+window.getHeroContext=name=>{const h=(DB.data[rank+"|"+role]||[]).find(x=>x.hero===name);return h?{...h,rank:DB.ranks[rank],role:DB.roles[role],sourceWindow:DB.sourceWindow}:null};
 const $=id=>document.getElementById(id);
 function tabs(el,items,cur,fn){el.innerHTML="";items.forEach((t,i)=>{const b=document.createElement("button");b.className="tab"+(i===cur?" on":"");b.textContent=t;b.onclick=()=>fn(i);el.appendChild(b)})}
 function tier(w){return w>=52.5?"S":w>=50.8?"A":w>=49?"B":"C"}
@@ -236,7 +237,7 @@ function render(){
   const f=d.filter(x=>x.hero.toLowerCase().includes(q));
   $("list").innerHTML=`<div class="row head"><div>Тир</div><div>Герой</div><div>Винрейт</div><div class="num">Пик</div><div class="num">Тренд</div></div>`+
   (f.length?f.map(x=>{const t=tier(x.wr),ini=x.hero.split(" ").map(w=>w[0]).join("").slice(0,2);
-   return`<div class="row"><div class="tier t${t}">${t}</div><div class="hero"><span class="av">${ini}</span><span class="nm">${esc(x.hero)}</span></div>
+   return`<div class="row"><div class="tier t${t}">${t}</div><div class="hero"><span class="av">${ini}</span><button class="hero-link" data-hero-id="${Number(x.heroId)||0}" data-hero-name="${esc(x.hero)}">${esc(x.hero)} ↗</button></div>
    <div class="wr"><b>${x.wr.toFixed(1)}%</b><div class="trk"><div class="fill" style="width:${Math.max(0,Math.min(100,(x.wr-44)/12*100))}%"></div></div></div>
    <div class="num">${x.pr.toFixed(1)}%</div><div class="num ${x.tr>=0?"up":"dn"}">${x.tr>=0?"▲":"▼"} ${Math.abs(x.tr).toFixed(1)}</div></div>`}).join(""):`<div class="empty">Герой не найден</div>`);
 }
@@ -260,7 +261,7 @@ async function findMatch(){
     if(r.status===404){msg("Матч не найден. Проверьте ID: возможно, он слишком старый или ещё не попал в базу.");return}
     if(!r.ok)throw new Error(r.status);
     const m=await r.json();
-    if(!m||m.error||!m.players){msg("Данных по этому матчу нет.");return}
+    if(!m||m.error||!Array.isArray(m.players)||!m.players.length){msg("Данных по этому матчу нет.");return}
     showMatch(m,H);
   }catch(e){msg("Не удалось загрузить матч. Попробуйте через минуту: у OpenDota есть лимит запросов.")}
 }
@@ -314,11 +315,12 @@ function showMatch(m,H){
   $("mres").innerHTML='<div class="top"><div class="card"><div class="k">Матч '+esc(m.match_id)+'</div><div class="v '+(m.radiant_win?"win":"lose")+'">'+(m.radiant_win?"Победил Свет":"Победила Тьма")+'</div><div class="s">'+m.radiant_score+' : '+m.dire_score+' · '+mmss(m.duration)+'</div><div class="s">'+esc(MODES[m.game_mode]||("Режим "+m.game_mode))+' · '+new Date(m.start_time*1000).toLocaleString("ru-RU")+'</div></div>'+
     card("Больше всего убийств",bk,["kills","kills"])+card("Больше всего добитых крипов",bl,["last_hits","LH"])+card("Больше всего денаев",bd,["denies","DN"])+card("Больше всего урона",bh,["hero_damage","урона"])+
     card("Больше всего лечения",best("hero_healing"),["hero_healing","лечения"])+card("Больше урона по строениям",best("tower_damage"),["tower_damage","урона"])+card("Больше всего вардов",best("obs_placed"),["obs_placed","обс."])+'</div>'+
-    '<div class="sec"><div class="label">Ход матча</div><div class="tabs"><button class="tab on" id="cg" onclick="drawChart(\'g\')">Золото</button><button class="tab" id="cx" onclick="drawChart(\'x\')">Опыт</button></div><div class="cbox" id="chartbox"></div></div>'+
+    '<section id="matchAnalysis" class="account-panel"></section><div class="sec"><div class="label">Ход матча</div><div class="tabs"><button class="tab on" id="cg" onclick="drawChart(\'g\')">Золото</button><button class="tab" id="cx" onclick="drawChart(\'x\')">Опыт</button></div><div class="cbox" id="chartbox"></div></div>'+
     (EV.length?'<div class="sec"><div class="label">События матча</div><div class="ev">'+EV.map(e=>'<div class="er"><span class="et">'+mmss(Math.max(0,e.t))+'</span><span class="dot '+(e.rad?"dr":"dd")+'"></span>'+esc(e.txt)+'</div>').join("")+'</div></div>':"")+
     buildSec(P)+'<div class="sec"><div class="label">Игроки · нажмите на строку, чтобы раскрыть детали</div>'+team(true)+team(false)+'</div>'+
     '<div class="note">LH — добитые крипы, DN — денаи, GPM/XPM — золото и опыт в минуту, Net — чистая стоимость. Зелёная точка в событиях — выгода Света, красная — Тьмы. Данные: OpenDota; у неразобранных матчей часть полей пустая.</div>';
   drawChart("g");
+  window.dispatchEvent(new CustomEvent("frostmeta:match",{detail:{match:m,heroes:H}}));
 }
 
 const RK=["","Herald","Guardian","Crusader","Archon","Legend","Ancient","Divine","Immortal"];
@@ -460,8 +462,9 @@ if (!window.Capacitor?.isNativePlatform() && 'serviceWorker' in navigator && (lo
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'}).catch(() => {}));
 }
 </script>
+<dialog id="heroDialog" class="hero-dialog"><div class="dialog-head"><h2 id="heroTitle"></h2><button class="dialog-close" id="closeHero" aria-label="Закрыть карточку героя">×</button></div><div id="heroBody" aria-live="polite"></div></dialog>
 <dialog id="downloadDialog"><div class="dialog-head"><h2>FROSTMETA с тобой</h2><button class="dialog-close" id="closeDownload" aria-label="Закрыть">×</button></div><p class="small-note">Мета, матчи и твой профиль Dota 2 — в отдельном приложении.</p><div class="download-grid" id="storeLinks"></div><p class="small-note">Версии для магазинов готовятся к публикации. Здесь появятся ссылки, когда приложения станут доступны.</p></dialog>
 <div class="toast" id="toast" role="status" hidden></div>
-<script type="module" src="./app.mjs"></script>
+<script type="module" src="./app.mjs?v=4"></script>
 </body>
 </html>
