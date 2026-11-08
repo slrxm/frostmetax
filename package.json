@@ -1,0 +1,33 @@
+{
+  "name": "frostmeta",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --use-env-proxy server/index.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.mjs && python -m unittest discover -s tests -p 'test_*.py'",
+    "mobile:sync": "npm run build && cap sync",
+    "android": "cap open android",
+    "ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.0",
+    "@capacitor/app": "^7.1.0",
+    "@capacitor/browser": "^7.0.2",
+    "@capacitor/core": "^7.4.0",
+    "@capacitor/ios": "^7.4.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.0",
+    "helmet": "^8.1.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.0",
+    "@capacitor/assets": "^3.0.5",
+    "esbuild": "^0.25.0",
+    "@playwright/test": "^1.56.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

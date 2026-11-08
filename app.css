@@ -1,0 +1,174 @@
+.utility {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.utility button,
+.utility a {
+  font: inherit;
+  font-size: 13px;
+}
+.quiet {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--txt);
+  padding: 10px 14px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.quiet:hover {
+  border-color: var(--ice);
+}
+.meta-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin: 18px 0 4px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--mut);
+  font-size: 12px;
+}
+.meta-status strong {
+  color: var(--up);
+}
+.meta-status.stale strong {
+  color: #ffd38b;
+}
+.meta-status button {
+  font-size: 12px;
+}
+.account-panel {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(145deg, #21132f, #100b19);
+  margin-bottom: 22px;
+}
+.account-panel h2 {
+  margin-top: 0;
+  font-size: 22px;
+}
+.account-panel p {
+  color: var(--mut);
+  line-height: 1.6;
+}
+.account-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.account-email {
+  overflow-wrap: anywhere;
+}
+.danger {
+  color: #ff9bb1;
+}
+.small-note {
+  font-size: 12px;
+  color: var(--mut);
+  line-height: 1.6;
+}
+.download-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.store {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 14px;
+  padding: 20px;
+  color: var(--txt);
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.store span {
+  font-size: 12px;
+  color: var(--mut);
+}
+.store[aria-disabled="true"] {
+  opacity: 0.6;
+}
+dialog {
+  color: var(--txt);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 24px;
+  width: min(540px, calc(100% - 24px));
+  box-shadow: 0 20px 100px #0009;
+}
+dialog::backdrop {
+  background: #030108cc;
+  backdrop-filter: blur(6px);
+}
+.dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.dialog-head h2 {
+  font-size: 21px;
+}
+.dialog-close {
+  border: 0;
+  background: none;
+  color: var(--mut);
+  font-size: 28px;
+  cursor: pointer;
+}
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(560px, 90%);
+  background: #271338;
+  border: 1px solid var(--ice);
+  color: #fff;
+  padding: 14px 20px;
+  border-radius: 12px;
+  z-index: 10;
+  font-size: 14px;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+:focus-visible {
+  outline: 2px solid var(--ice);
+  outline-offset: 3px;
+}
+body.native .download-trigger {
+  display: none;
+}
+body.native .wrap {
+  padding-top: calc(18px + env(safe-area-inset-top));
+  padding-bottom: calc(44px + env(safe-area-inset-bottom));
+}
+@media (max-width: 480px) {
+  .download-grid {
+    grid-template-columns: 1fr;
+  }
+  .utility {
+    justify-content: center;
+  }
+  .account-panel {
+    padding: 18px;
+  }
+  .meta-status {
+    align-items: flex-start;
+  }
+}
