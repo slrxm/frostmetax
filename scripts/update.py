@@ -1,95 +1,130 @@
-"""Ежедневное обновление меты Dota 2 из STRATZ GraphQL -> data.json"""
-import json, os, sys, time, pathlib, datetime, urllib.request, urllib.error
+"""Fetch daily STRATZ snapshots; never replace valid statistics with empty data."""
+import datetime as dt
+import hashlib
+import json
+import os
+import pathlib
+import time
+import urllib.error
+import urllib.request
 
-TOKEN = os.environ["STRATZ_TOKEN"]
-URL = "https://api.stratz.com/graphql"
-OUT = pathlib.Path(__file__).resolve().parent.parent / "data.json"
-MIN_GAMES = 100
-RETRIES = 6
-BRACKETS = [("HERALD,GUARDIAN", "Herald–Guardian"), ("CRUSADER,ARCHON", "Crusader–Archon"),
-            ("LEGEND,ANCIENT", "Legend–Ancient"), ("DIVINE", "Divine"), ("IMMORTAL", "Immortal")]
-POSITIONS = [("POSITION_1", "Pos 1 · Carry"), ("POSITION_2", "Pos 2 · Mid"), ("POSITION_3", "Pos 3 · Offlane"),
-             ("POSITION_4", "Pos 4 · Soft Support"), ("POSITION_5", "Pos 5 · Hard Support")]
+OUT = pathlib.Path(__file__).resolve().parent.parent / 'data.json'
+STATUS = OUT.with_name('meta-status.json')
+BRACKETS = [('HERALD,GUARDIAN', 'Herald–Guardian'), ('CRUSADER,ARCHON', 'Crusader–Archon'),
+            ('LEGEND,ANCIENT', 'Legend–Ancient'), ('DIVINE', 'Divine'), ('IMMORTAL', 'Immortal')]
+POSITIONS = [('POSITION_1', 'Pos 1 · Carry'), ('POSITION_2', 'Pos 2 · Mid'), ('POSITION_3', 'Pos 3 · Offlane'),
+             ('POSITION_4', 'Pos 4 · Soft Support'), ('POSITION_5', 'Pos 5 · Hard Support')]
+
+
+def now():
+    return dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')
 
 
 def gql(query):
-    """Запрос к STRATZ с повторами при временных ошибках (403, 429, 5xx, сеть)."""
-    body = json.dumps({"query": query}).encode()
-    headers = {"Content-Type": "application/json", "Authorization": "Bearer " + TOKEN,
-               "User-Agent": "STRATZ_API"}
-    last = ""
-    for attempt in range(RETRIES):
+    token = os.getenv('STRATZ_TOKEN')
+    if not token:
+        raise RuntimeError('STRATZ_TOKEN is missing; previous data retained')
+    for attempt in range(4):
         try:
-            req = urllib.request.Request(URL, body, headers)
-            with urllib.request.urlopen(req, timeout=60) as r:
-                d = json.load(r)
-            if d.get("errors"):
-                raise RuntimeError("STRATZ error: " + json.dumps(d["errors"])[:900] + "\nQUERY: " + query)
-            return d["data"]
-        except urllib.error.HTTPError as e:
-            text = e.read().decode("utf-8", "replace")[:600]
-            last = "HTTP %s: %s" % (e.code, text)
-            if e.code not in (403, 429, 500, 502, 503, 504):
-                raise RuntimeError(last + "\nQUERY: " + query)
-        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
-            last = "network: %s" % e
-        wait = min(5 * 2 ** attempt, 120)
-        print("  попытка %d/%d не удалась (%s), жду %d c" % (attempt + 1, RETRIES, last[:120], wait), flush=True)
-        time.sleep(wait)
-    raise RuntimeError("Не удалось после %d попыток: %s" % (RETRIES, last))
+            req = urllib.request.Request('https://api.stratz.com/graphql', json.dumps({'query': query}).encode(),
+                {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'User-Agent': 'STRATZ_API'})
+            with urllib.request.urlopen(req, timeout=40) as response:
+                result = json.load(response)
+            if result.get('errors'):
+                raise RuntimeError('STRATZ GraphQL: ' + json.dumps(result['errors'])[:800])
+            if not result.get('data'):
+                raise RuntimeError('STRATZ returned no data')
+            return result['data']
+        except urllib.error.HTTPError as error:
+            if error.code not in (429, 500, 502, 503, 504) or attempt == 3:
+                raise RuntimeError(f'STRATZ HTTP {error.code}') from error
+            delay = min(int(error.headers.get('Retry-After', 5 * 2 ** attempt)), 60)
+        except (urllib.error.URLError, TimeoutError) as error:
+            if attempt == 3:
+                raise RuntimeError('STRATZ network failure') from error
+            delay = 5 * 2 ** attempt
+        time.sleep(delay)
+    raise RuntimeError('STRATZ unavailable')
 
 
-# --- прошлые данные (для тренда и как запасной вариант) ---
-prev_data, old_wr = {}, {}
-if OUT.exists():
-    try:
-        prev = json.loads(OUT.read_text(encoding="utf-8"))
-        if not prev.get("demo"):
-            prev_data = prev.get("data", {})
-            old_wr = {k: {x["hero"]: x["wr"] for x in v} for k, v in prev_data.items()}
-    except Exception:
-        pass
-
-try:
-    names = {h["id"]: h["displayName"] for h in gql("{constants{heroes{id displayName}}}")["constants"]["heroes"]}
-except RuntimeError as e:
-    sys.exit("Не получен список героев. Старые данные не тронуты.\n" + str(e))
-
-data, ok, failed = {}, 0, []
-for bi, (b, _) in enumerate(BRACKETS):
-    for pi, (p, _) in enumerate(POSITIONS):
-        key = f"{bi}|{pi}"
-        try:
-            rows = gql("{heroStats{winWeek(take:1,bracketIds:[%s],positionIds:[%s]){heroId matchCount winCount}}}"
-                       % (b, p))["heroStats"]["winWeek"]
-        except RuntimeError as e:
-            print("ПРОПУСК", key, str(e)[:400], flush=True)
-            failed.append(key)
-            data[key] = prev_data.get(key, [])  # оставляем старые данные
+def aggregate(rows, names, old, same_window=True):
+    totals = {}
+    for row in rows:
+        matches, wins = row['matchCount'], row['winCount']
+        if matches < 0 or wins < 0 or wins > matches:
+            raise ValueError('Invalid STRATZ counts')
+        target = totals.setdefault(row['heroId'], [0, 0])
+        target[0] += matches
+        target[1] += wins
+    total = sum(v[0] for v in totals.values())
+    previous = {x['hero']: x for x in old}
+    result = []
+    for hid, (matches, wins) in sorted(totals.items()):
+        if matches < 100 or hid not in names:
             continue
-        agg = {}
-        for r in rows:
-            a = agg.setdefault(r["heroId"], [0, 0])
-            a[0] += r["matchCount"]
-            a[1] += r["winCount"]
-        total = sum(m for m, _ in agg.values()) or 1
-        out = []
-        for hid, (m, w) in agg.items():
-            if m < MIN_GAMES or hid not in names:
-                continue
-            wr = w / m * 100
-            prev_wr = old_wr.get(key, {}).get(names[hid])
-            out.append({"hero": names[hid], "wr": round(wr, 2), "pr": round(m / total * 100, 2),
-                        "tr": round(wr - prev_wr, 2) if prev_wr is not None else 0})
-        data[key] = out
-        ok += 1
-        time.sleep(1)
+        wr = round(wins / matches * 100, 2)
+        before = previous.get(names[hid]) if same_window else None
+        # Keep the last meaningful trend if a polling run returns the same snapshot.
+        trend = before.get('tr', 0) if before and before['wr'] == wr else round(wr - before['wr'], 2) if before else 0
+        result.append({'heroId': hid, 'hero': names[hid], 'wr': wr,
+                       'pr': round(matches / total * 100, 2), 'tr': trend, 'matches': matches})
+    if not result:
+        raise ValueError('Empty or undersized snapshot; previous slice retained')
+    return result
 
-if ok == 0:
-    sys.exit("Ни один срез не загрузился. Старые данные не тронуты.")
 
-OUT.write_text(json.dumps({"updated": datetime.date.today().isoformat(), "demo": False,
-    "ranks": [r for _, r in BRACKETS], "roles": [r for _, r in POSITIONS], "data": data},
-    ensure_ascii=False), encoding="utf-8")
-print("OK: срезов %d из %d, строк %d, пропущено: %s" % (ok, len(BRACKETS) * len(POSITIONS),
-      sum(len(v) for v in data.values()), failed or "нет"))
+def fingerprint(data):
+    values = {k: [{f: x.get(f) for f in ('hero', 'wr', 'pr', 'matches')} for x in v] for k, v in data.items()}
+    return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
+
+
+def atomic_write(path, data):
+    temp = path.with_suffix('.tmp')
+    temp.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+    temp.replace(path)
+
+
+def update():
+    prev = json.loads(OUT.read_text()) if OUT.exists() else {}
+    previous = prev.get('data', {}) if not prev.get('demo') else {}
+    names = {h['id']: h['displayName'] for h in gql('{constants{heroes{id displayName}}}')['constants']['heroes']}
+    data, failed, slice_updates = {}, [], dict(prev.get('sliceUpdatedAt', {}))
+    slice_windows = dict(prev.get('sliceWindow', {}))
+    checked = now()
+    for bi, (bracket, _) in enumerate(BRACKETS):
+        for pi, (position, _) in enumerate(POSITIONS):
+            key = f'{bi}|{pi}'
+            try:
+                # winDay returns the latest daily snapshot. Weekly aggregates can stay fixed for days.
+                query = '{heroStats{winDay(take:1,bracketIds:[%s],positionIds:[%s]){heroId matchCount winCount}}}' % (bracket, position)
+                rows = gql(query)['heroStats']['winDay']
+                data[key] = aggregate(rows, names, previous.get(key, []), slice_windows.get(key, prev.get('sourceWindow')) == 'day')
+                slice_updates[key] = checked
+                slice_windows[key] = 'day'
+            except (RuntimeError, ValueError, KeyError, TypeError) as error:
+                print(f'Slice {key} failed: {error}', flush=True)
+                failed.append(key)
+                data[key] = previous.get(key, [])
+            time.sleep(.3)
+    if len(failed) == len(BRACKETS) * len(POSITIONS):
+        raise RuntimeError('All slices failed; previous data retained')
+    unchanged = fingerprint(data) == fingerprint(previous)
+    changed_at = (prev.get('dataUpdatedAt') or prev.get('updated')) if unchanged else checked
+    result = {'updated': changed_at, 'dataUpdatedAt': changed_at, 'checkedAt': checked,
+              'source': 'STRATZ', 'sourceWindow': 'day', 'unchanged': unchanged, 'failedSlices': failed,
+              'sliceWindow': slice_windows, 'sliceUpdatedAt': slice_updates, 'demo': False, 'ranks': [x[1] for x in BRACKETS],
+              'roles': [x[1] for x in POSITIONS], 'data': data}
+    atomic_write(OUT, result)
+    atomic_write(STATUS, {'checkedAt': checked, 'ok': not failed, 'failedSlices': failed, 'unchanged': unchanged})
+    print(f'Updated {25-len(failed)}/25 slices; unchanged={unchanged}', flush=True)
+    if failed:
+        raise RuntimeError('Partial update; see failedSlices in data.json')
+
+
+if __name__ == '__main__':
+    try:
+        update()
+    except Exception as error:
+        # Status remains visible even if authentication or the entire upstream API failed.
+        atomic_write(STATUS, {'checkedAt': now(), 'ok': False, 'error': str(error)[:500]})
+        raise

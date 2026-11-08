@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#080510">
-<link rel="icon" type="image/png" sizes="64x64" href="./favicon.png">
-<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="64x64" href="./favicon.png?v=3">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=3">
 <link rel="manifest" href="./manifest.json">
 <title>FROSTMETA — мета Dota 2</title>
 <style>
@@ -149,11 +149,14 @@ input:focus,select:focus{border-color:#bd7aff;box-shadow:0 0 0 3px #a855f733;}
 .pick:hover{border-color:#bd7aff;box-shadow:0 0 18px #a855f744;}
 @media(max-width:640px){.wrap{padding:22px 12px 44px}.brand-icon{width:66px;height:66px;border-radius:17px}.nav{justify-content:flex-start;overflow-x:auto;padding-bottom:5px}.nav .tab{white-space:nowrap;padding:10px 14px}}
 </style>
+<link rel="stylesheet" href="./app.css">
 </head>
 <body>
 <div class="wrap">
+<div class="utility"><button class="quiet download-trigger" id="downloadApp">↓ Скачать приложение</button><button class="quiet" id="accountButton">Войти / мой профиль</button></div>
+<section id="accountPanel" class="account-panel" hidden aria-live="polite"></section>
 <header>
-<img class="brand-icon" src="./icons/icon-192.png" alt="Логотип FROSTMETA">
+<img class="brand-icon" src="./icons/icon-192.png?v=3" alt="Логотип FROSTMETA">
 <h1>FROSTMETA</h1>
 <div class="sub">МЕТА И СТАТИСТИКА МАТЧЕЙ DOTA 2</div>
 </header>
@@ -165,6 +168,7 @@ input:focus,select:focus{border-color:#bd7aff;box-shadow:0 0 0 3px #a855f733;}
 <button class="tab" id="nv3" onclick="view(3)">Сравнение</button>
 </div>
 <div id="metaView">
+<div class="meta-status" id="metaStatus" aria-live="polite"><span>Загружаем статистику…</span><button class="quiet" id="refreshMeta">Обновить</button></div>
 <div class="label">Рейтинг</div>
 <div class="tabs" id="ranks"></div>
 <div class="label">Позиция</div>
@@ -213,6 +217,7 @@ input:focus,select:focus{border-color:#bd7aff;box-shadow:0 0 0 3px #a855f733;}
 
 <script>
 let DB={ranks:[],roles:[],data:{}};
+window.applyMeta=function(j){DB=j; rank=Math.min(rank,DB.ranks.length-1);role=Math.min(role,DB.roles.length-1);render()};
 let rank=2,role=0;
 const $=id=>document.getElementById(id);
 function tabs(el,items,cur,fn){el.innerHTML="";items.forEach((t,i)=>{const b=document.createElement("button");b.className="tab"+(i===cur?" on":"");b.textContent=t;b.onclick=()=>fn(i);el.appendChild(b)})}
@@ -223,21 +228,19 @@ function render(){
   let d=(DB.data[rank+"|"+role]||[]).slice();
   const k=$("sort").value;
   d.sort((a,b)=>b[k]-a[k]);
+  if(!d.length){$("top").innerHTML="";$("list").innerHTML='<div class="empty">Для этого рейтинга и позиции пока нет данных. Выберите другой фильтр.</div>';return}
   const best=[...d].sort((a,b)=>b.wr-a.wr)[0],pop=[...d].sort((a,b)=>b.pr-a.pr)[0],rise=[...d].sort((a,b)=>b.tr-a.tr)[0];
-  $("top").innerHTML=[["Лучший винрейт",best,best.wr.toFixed(1)+"%"],["Самый популярный",pop,pop.pr.toFixed(1)+"% пиков"],["Растёт быстрее всех",rise,"+"+rise.tr.toFixed(1)+" п.п."]]
-   .map(([t,h,s])=>`<div class="card"><div class="k">${t}</div><div class="v">${h.hero}</div><div class="s">${s}</div></div>`).join("");
+  $("top").innerHTML=[["Лучший винрейт",best,best.wr.toFixed(1)+"%"],["Самый популярный",pop,pop.pr.toFixed(1)+"% пиков"],["Растёт быстрее всех",rise,(rise.tr>=0?"+":"")+rise.tr.toFixed(1)+" п.п."]]
+   .map(([t,h,s])=>`<div class="card"><div class="k">${t}</div><div class="v">${esc(h.hero)}</div><div class="s">${s}</div></div>`).join("");
   const q=$("q").value.trim().toLowerCase();
   const f=d.filter(x=>x.hero.toLowerCase().includes(q));
   $("list").innerHTML=`<div class="row head"><div>Тир</div><div>Герой</div><div>Винрейт</div><div class="num">Пик</div><div class="num">Тренд</div></div>`+
   (f.length?f.map(x=>{const t=tier(x.wr),ini=x.hero.split(" ").map(w=>w[0]).join("").slice(0,2);
-   return`<div class="row"><div class="tier t${t}">${t}</div><div class="hero"><span class="av">${ini}</span><span class="nm">${x.hero}</span></div>
-   <div class="wr"><b>${x.wr.toFixed(1)}%</b><div class="trk"><div class="fill" style="width:${Math.min(100,(x.wr-44)/12*100)}%"></div></div></div>
+   return`<div class="row"><div class="tier t${t}">${t}</div><div class="hero"><span class="av">${ini}</span><span class="nm">${esc(x.hero)}</span></div>
+   <div class="wr"><b>${x.wr.toFixed(1)}%</b><div class="trk"><div class="fill" style="width:${Math.max(0,Math.min(100,(x.wr-44)/12*100))}%"></div></div></div>
    <div class="num">${x.pr.toFixed(1)}%</div><div class="num ${x.tr>=0?"up":"dn"}">${x.tr>=0?"▲":"▼"} ${Math.abs(x.tr).toFixed(1)}</div></div>`}).join(""):`<div class="empty">Герой не найден</div>`);
 }
 $("q").oninput=render;$("sort").onchange=render;
-fetch("data.json",{cache:"no-cache"}).then(r=>r.json()).then(j=>{DB=j;
- $("note").textContent=j.demo?"⚠ Демонстрационные данные. После первого запуска обновления здесь появится реальная статистика.":"Данные: STRATZ · обновлено "+j.updated+" · тренд — изменение винрейта к прошлому обновлению";
- render()}).catch(()=>{$("list").innerHTML='<div class="empty">Не удалось загрузить data.json. Откройте сайт через хостинг (GitHub Pages), а не как файл.</div>'});
 
 function view(i){["metaView","matchView","playerView","cmpView"].forEach((v,j)=>$(v).style.display=i===j?"":"none");[0,1,2,3].forEach(j=>$("nv"+j).className="tab"+(i===j?" on":""))}
 const API="https://api.opendota.com/api/";
@@ -453,9 +456,12 @@ function renderCmp(A,B,H){
 document.addEventListener("DOMContentLoaded",()=>{$("mid").addEventListener("keydown",e=>{if(e.key==="Enter")findMatch()});$("pid").addEventListener("keydown",e=>{if(e.key==="Enter")findPlayer()});["ca","cb"].forEach(i=>$(i).addEventListener("keydown",e=>{if(e.key==="Enter")compare()}))});
 </script>
 <script>
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+if (!window.Capacitor?.isNativePlatform() && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'}).catch(() => {}));
 }
 </script>
+<dialog id="downloadDialog"><div class="dialog-head"><h2>FROSTMETA с тобой</h2><button class="dialog-close" id="closeDownload" aria-label="Закрыть">×</button></div><p class="small-note">Мета, матчи и твой профиль Dota 2 — в отдельном приложении.</p><div class="download-grid" id="storeLinks"></div><p class="small-note">Версии для магазинов готовятся к публикации. Здесь появятся ссылки, когда приложения станут доступны.</p></dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+<script type="module" src="./app.mjs"></script>
 </body>
 </html>

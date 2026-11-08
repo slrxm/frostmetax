@@ -1,11 +1,23 @@
-# FROSTMETA 
+# FROSTMETA
 
-1. Создайте репозиторий на GitHub и загрузите все файлы из этой папки.
-2. Получите бесплатный токен: https://stratz.com/api (вход через Steam).
-3. Repo → Settings → Secrets and variables → Actions → New secret: имя `STRATZ_TOKEN`, значение — токен.
-4. Repo → Settings → Pages → Deploy from branch → `main` / root. Сайт появится по ссылке GitHub Pages.
-5. Repo → Actions → «Update meta» → Run workflow (первый запуск вручную). Дальше обновление идёт каждый день в 04:00 UTC.
+Мета Dota 2, матчи и профили игроков. Веб-интерфейс + Capacitor Android/iOS + Node.js сервер
+для Google OAuth и подтверждённой привязки Steam.
 
-Если запуск упал с «STRATZ error» — скрипт не менялся с момента написания и не тестировался на живом API.
-Откройте https://stratz.com/api (GraphQL Explorer), проверьте имена полей `winWeek` / `bracketIds` / `positionIds`
-и поправьте запрос в `scripts/update.py` (функция запроса — одна строка), либо пришлите мне текст ошибки.
+```sh
+npm ci
+npm run build
+npm start
+```
+
+Node.js 24. Сайт: http://localhost:3000. Без Google credentials статистика работает,
+авторизация показывает, что сервис ещё не подключён.
+
+- [Настройка сервера, Google, мобильных сборок и меты](docs/SETUP.md)
+- [Черновик сведений об обработке данных](docs/PRIVACY.md)
+- `npm test` — сервер и обновление меты
+- `npx playwright test` — браузерные сценарии
+- `npm run mobile:sync` — собрать интерфейс и обновить оба мобильных проекта
+
+`src/app.mjs` — исходник новых функций, `app.mjs` — сгенерированный bundle для совместимости
+с GitHub Pages из корня. После изменений запускать `npm run build`.
+Секреты хранятся на сервере и в GitHub Actions, не в исходниках приложения.

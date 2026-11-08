@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+var/
+playwright-report/
+test-results/
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/
+ios/App/Pods/
+ios/App/App/public/
+android/app/src/main/assets/public/
+*.keystore
+*.jks
+__pycache__/
+*.pyc

@@ -1,20 +1,44 @@
 name: Update meta
 on:
-  schedule: [{cron: "0 4 * * *"}]
+  schedule:
+    - cron: '17 */3 * * *'
   workflow_dispatch:
 permissions:
   contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: meta-update
+  cancel-in-progress: false
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
-      - run: python scripts/update.py
+        with:
+          python-version: '3.12'
+      - name: Fetch daily statistics
+        id: fetch
+        continue-on-error: true
+        run: python scripts/update.py
         env:
           STRATZ_TOKEN: ${{ secrets.STRATZ_TOKEN }}
-      - run: |
-          git config user.name "meta-bot"; git config user.email "bot@users.noreply.github.com"
-          git add data.json
-          git diff --cached --quiet || (git commit -m "Update meta" && git push)
+      - name: Commit statistics and health status
+        run: |
+          git config user.name 'meta-bot'
+          git config user.email 'bot@users.noreply.github.com'
+          git add data.json meta-status.json
+          git diff --cached --quiet || (git commit -m 'Update meta statistics and freshness' && git push)
+      - name: Surface upstream failures
+        if: steps.fetch.outcome == 'failure'
+        run: exit 1
+  deploy:
+    if: always() && github.ref == 'refs/heads/main'
+    needs: update
+    uses: ./.github/workflows/pages.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
