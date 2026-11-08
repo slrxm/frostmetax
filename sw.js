@@ -1,5 +1,5 @@
-const CACHE='frostmeta-v4';
-const SHELL=['./','./index.html','./app.css?v=4','./app.mjs?v=4','./app-config.json','./manifest.json','./favicon.png?v=3','./icons/icon-192.png?v=3','./icons/icon-512.png'];
+const CACHE='frostmeta-v5';
+const SHELL=['./','./index.html','./theme.css?v=5','./core.js?v=5','./app.css?v=5','./app.mjs?v=5','./app-config.json','./manifest.json','./favicon.png?v=3','./icons/icon-192.png?v=3','./icons/icon-512.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));self.skipWaiting();});
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('frostmeta-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{

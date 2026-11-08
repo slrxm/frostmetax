@@ -15,6 +15,10 @@ for (const f of [
 try {
   await copyFile("meta-status.json", "dist/meta-status.json");
 } catch {}
+for (const name of ["core.js", "theme.css"]) {
+  await copyFile(`src/${name}`, `dist/${name}`);
+  await copyFile(`src/${name}`, name);
+}
 await cp("icons", "dist/icons", { recursive: true });
 await build({
   entryPoints: ["src/app.mjs"],

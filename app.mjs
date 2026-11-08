@@ -598,21 +598,42 @@ function matchSummary(match) {
   return lines;
 }
 
-// src/hero-insights.mjs
-var API = "https://api.opendota.com/api/";
-var cache = /* @__PURE__ */ new Map();
-async function get(path) {
-  const hit = cache.get(path);
-  if (hit && Date.now() - hit.at < 6e5) return hit.value;
-  const r = await fetch(API + path, { signal: AbortSignal.timeout(15e3) });
-  if (!r.ok)
-    throw Error(
-      r.status === 429 ? "OpenDota \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0438\u043B \u0437\u0430\u043F\u0440\u043E\u0441\u044B. \u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439 \u0447\u0435\u0440\u0435\u0437 \u043C\u0438\u043D\u0443\u0442\u0443." : "OpenDota \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D."
-    );
-  const value = await r.json();
-  cache.set(path, { value, at: Date.now() });
-  return value;
+// src/request-json.mjs
+function createJSONClient({
+  baseUrl,
+  ttl = 6e5,
+  timeout = 15e3,
+  fetchImpl = fetch,
+  now = Date.now
+}) {
+  const cache = /* @__PURE__ */ new Map(), pending = /* @__PURE__ */ new Map();
+  return async function get2(path) {
+    const hit = cache.get(path);
+    if (hit && now() - hit.at < ttl) return hit.value;
+    if (pending.has(path)) return pending.get(path);
+    const task = (async () => {
+      const response = await fetchImpl(new URL(path, baseUrl), {
+        signal: AbortSignal.timeout(timeout)
+      });
+      if (!response.ok)
+        throw Error(
+          response.status === 429 ? "OpenDota \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0438\u043B \u0437\u0430\u043F\u0440\u043E\u0441\u044B. \u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439 \u0447\u0435\u0440\u0435\u0437 \u043C\u0438\u043D\u0443\u0442\u0443." : "OpenDota \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D."
+        );
+      const value = await response.json();
+      cache.set(path, { value, at: now() });
+      return value;
+    })();
+    pending.set(path, task);
+    try {
+      return await task;
+    } finally {
+      pending.delete(path);
+    }
+  };
 }
+
+// src/hero-insights.mjs
+var get = createJSONClient({ baseUrl: "https://api.opendota.com/api/" });
 var el = (tag, text, cls) => {
   const n = document.createElement(tag);
   if (text != null) n.textContent = text;
