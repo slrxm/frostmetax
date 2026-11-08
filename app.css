@@ -172,3 +172,60 @@ body.native .wrap {
     align-items: flex-start;
   }
 }
+.hero-link {
+  border: 0;
+  background: none;
+  color: var(--ice2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  padding: 3px 0;
+  white-space: normal;
+}
+.hero-link:hover {
+  text-decoration: underline;
+}
+.hero-dialog {
+  width: min(760px, calc(100% - 24px));
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.insight-section {
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+}
+.insight-section h3 {
+  font-size: 17px;
+}
+.insight-section h4 {
+  font-size: 14px;
+  color: var(--mut);
+}
+.insight-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #38234d66;
+  font-size: 13px;
+}
+.insight-row span:last-child {
+  flex-shrink: 0;
+  color: var(--mut);
+  font-variant-numeric: tabular-nums;
+}
+.match-shortcut {
+  display: block;
+  margin-top: 8px;
+}
+#localDotaId {
+  width: 100%;
+  margin-bottom: 12px;
+}
+#matchAnalysis {
+  margin-top: 22px;
+}
+#matchAnalysis p {
+  font-size: 14px;
+}

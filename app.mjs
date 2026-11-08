@@ -491,47 +491,13 @@ var init_dist = __esm({
   }
 });
 
-// node_modules/@capacitor/browser/dist/esm/web.js
+// node_modules/@capacitor/app/dist/esm/web.js
 var web_exports = {};
 __export(web_exports, {
-  Browser: () => Browser,
-  BrowserWeb: () => BrowserWeb
-});
-var BrowserWeb, Browser;
-var init_web = __esm({
-  "node_modules/@capacitor/browser/dist/esm/web.js"() {
-    init_dist();
-    BrowserWeb = class extends WebPlugin {
-      constructor() {
-        super();
-        this._lastWindow = null;
-      }
-      async open(options) {
-        this._lastWindow = window.open(options.url, options.windowName || "_blank");
-      }
-      async close() {
-        return new Promise((resolve, reject) => {
-          if (this._lastWindow != null) {
-            this._lastWindow.close();
-            this._lastWindow = null;
-            resolve();
-          } else {
-            reject("No active window to close!");
-          }
-        });
-      }
-    };
-    Browser = new BrowserWeb();
-  }
-});
-
-// node_modules/@capacitor/app/dist/esm/web.js
-var web_exports2 = {};
-__export(web_exports2, {
   AppWeb: () => AppWeb
 });
 var AppWeb;
-var init_web2 = __esm({
+var init_web = __esm({
   "node_modules/@capacitor/app/dist/esm/web.js"() {
     init_dist();
     AppWeb = class extends WebPlugin {
@@ -575,16 +541,296 @@ var init_web2 = __esm({
 // src/app.mjs
 init_dist();
 
-// node_modules/@capacitor/browser/dist/esm/index.js
-init_dist();
-var Browser2 = registerPlugin("Browser", {
-  web: () => Promise.resolve().then(() => (init_web(), web_exports)).then((m) => new m.BrowserWeb())
-});
+// src/hero-data.mjs
+function matchups(rows, minimum = 30) {
+  return rows.filter(
+    (x) => Number.isFinite(x.games_played) && x.games_played >= minimum && Number.isFinite(x.wins) && x.wins >= 0 && x.wins <= x.games_played
+  ).map((x) => ({ ...x, winrate: x.wins / x.games_played * 100 }));
+}
+function popularItems(counts, items) {
+  const byId = new Map(
+    Object.entries(items).map(([key, value]) => [
+      String(value.id),
+      { ...value, key }
+    ])
+  );
+  return Object.entries(counts || {}).map(([id, count]) => ({ item: byId.get(id), count })).filter(
+    (x) => x.item && !x.item.key.startsWith("recipe_") && Number.isFinite(x.count) && x.count > 0
+  ).sort((a, b) => b.count - a.count).slice(0, 8);
+}
+function matchSummary(match) {
+  const lines = [];
+  const p = (match.players || []).filter(
+    (x) => Number.isFinite(x.gold_per_min)
+  );
+  if (p.length) {
+    const top = p.reduce((a, b) => a.gold_per_min >= b.gold_per_min ? a : b);
+    lines.push({
+      type: "farm",
+      heroId: top.hero_id,
+      text: `\u041B\u0438\u0434\u0435\u0440 \u043F\u043E \u0437\u043E\u043B\u043E\u0442\u0443 \u0432 \u043C\u0438\u043D\u0443\u0442\u0443: ${top.gold_per_min} GPM.`
+    });
+  }
+  const adv = match.radiant_gold_adv;
+  if (Array.isArray(adv) && adv.length > 1 && adv.every(Number.isFinite)) {
+    let at = 1;
+    for (let i = 2; i < adv.length; i++)
+      if (Math.abs(adv[i] - adv[i - 1]) > Math.abs(adv[at] - adv[at - 1]))
+        at = i;
+    const swing = adv[at] - adv[at - 1];
+    if (swing)
+      lines.push({
+        type: "swing",
+        text: `\u0421\u0430\u043C\u043E\u0435 \u0431\u043E\u043B\u044C\u0448\u043E\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u0435\u0438\u043C\u0443\u0449\u0435\u0441\u0442\u0432\u0430 \u043F\u043E \u0437\u043E\u043B\u043E\u0442\u0443: ${at}-\u044F \u043C\u0438\u043D\u0443\u0442\u0430, ${Math.abs(swing).toLocaleString("ru-RU")} \u0432 \u043F\u043E\u043B\u044C\u0437\u0443 ${swing > 0 ? "\u0421\u0432\u0435\u0442\u0430" : "\u0422\u044C\u043C\u044B"}. \u042D\u0442\u043E \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0431\u0430\u043B\u0430\u043D\u0441\u0430 \u0437\u0430 \u043C\u0438\u043D\u0443\u0442\u0443, \u0430 \u043D\u0435 \u0437\u0430\u0440\u0430\u0431\u043E\u0442\u043E\u043A \u043A\u043E\u043C\u0430\u043D\u0434\u044B.`
+      });
+    const loserWasAhead = match.radiant_win === true ? Math.min(...adv) < -5e3 : match.radiant_win === false ? Math.max(...adv) > 5e3 : false;
+    if (loserWasAhead)
+      lines.push({
+        type: "comeback",
+        text: "\u041F\u043E\u0431\u0435\u0434\u0438\u0442\u0435\u043B\u044C \u043E\u0442\u044B\u0433\u0440\u0430\u043B \u043F\u0440\u0435\u0438\u043C\u0443\u0449\u0435\u0441\u0442\u0432\u043E \u0441\u043E\u043F\u0435\u0440\u043D\u0438\u043A\u0430 \u0431\u043E\u043B\u0435\u0435 5 000 \u0437\u043E\u043B\u043E\u0442\u0430."
+      });
+  }
+  if (!Array.isArray(adv) || adv.length < 2)
+    lines.push({
+      type: "missing",
+      text: "\u041D\u0435\u0442 \u043F\u043E\u043C\u0438\u043D\u0443\u0442\u043D\u044B\u0445 \u0434\u0430\u043D\u043D\u044B\u0445: \u0434\u043B\u044F \u043F\u043E\u0434\u0440\u043E\u0431\u043D\u043E\u0433\u043E \u0440\u0430\u0437\u0431\u043E\u0440\u0430 \u0437\u0430\u043F\u0440\u043E\u0441\u0438 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u043A\u0443 \u043C\u0430\u0442\u0447\u0430 \u0432 OpenDota."
+    });
+  return lines;
+}
+
+// src/hero-insights.mjs
+var API = "https://api.opendota.com/api/";
+var cache = /* @__PURE__ */ new Map();
+async function get(path) {
+  const hit = cache.get(path);
+  if (hit && Date.now() - hit.at < 6e5) return hit.value;
+  const r = await fetch(API + path, { signal: AbortSignal.timeout(15e3) });
+  if (!r.ok)
+    throw Error(
+      r.status === 429 ? "OpenDota \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0438\u043B \u0437\u0430\u043F\u0440\u043E\u0441\u044B. \u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439 \u0447\u0435\u0440\u0435\u0437 \u043C\u0438\u043D\u0443\u0442\u0443." : "OpenDota \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D."
+    );
+  const value = await r.json();
+  cache.set(path, { value, at: Date.now() });
+  return value;
+}
+var el = (tag, text, cls) => {
+  const n = document.createElement(tag);
+  if (text != null) n.textContent = text;
+  if (cls) n.className = cls;
+  return n;
+};
+function section(root, title, note) {
+  const s = el("section", null, "insight-section");
+  s.append(el("h3", title));
+  if (note) s.append(el("p", note, "small-note"));
+  root.append(s);
+  return s;
+}
+function initInsights() {
+  const dialog = document.getElementById("heroDialog"), body = document.getElementById("heroBody");
+  let version = 0;
+  document.getElementById("closeHero").onclick = () => {
+    version++;
+    dialog.close();
+  };
+  dialog.addEventListener("close", () => version++);
+  async function open(name, id) {
+    const current = ++version;
+    document.getElementById("heroTitle").textContent = name;
+    body.replaceChildren();
+    if (!dialog.open) dialog.showModal();
+    const meta = window.getHeroContext(name);
+    if (meta) {
+      const s = section(
+        body,
+        "\u041C\u0435\u0442\u0430 \u0432 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C \u0444\u0438\u043B\u044C\u0442\u0440\u0435",
+        `${meta.rank} \xB7 ${meta.role} \xB7 STRATZ \xB7 ${meta.sourceWindow === "day" ? "\u0441\u0443\u0442\u043E\u0447\u043D\u0430\u044F" : "\u043D\u0435\u0434\u0435\u043B\u044C\u043D\u0430\u044F"} \u0432\u044B\u0431\u043E\u0440\u043A\u0430`
+      );
+      s.append(
+        el(
+          "p",
+          `\u0412\u0438\u043D\u0440\u0435\u0439\u0442 ${meta.wr.toFixed(1)}% \xB7 \u043F\u0438\u043A\u0440\u0435\u0439\u0442 ${meta.pr.toFixed(1)}%${meta.matches ? ` \xB7 ${meta.matches.toLocaleString("ru-RU")} \u043C\u0430\u0442\u0447\u0435\u0439` : ""}`
+        )
+      );
+    }
+    const loading2 = el("p", "\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043C \u0441\u0431\u043E\u0440\u043A\u0438 \u0438 \u0441\u043E\u043F\u0435\u0440\u043D\u0438\u043A\u043E\u0432\u2026", "small-note");
+    body.append(loading2);
+    try {
+      const heroes = await get("heroes");
+      if (current !== version) return;
+      const hero = heroes.find((x) => Number(x.id) === id) || heroes.find((x) => x.localized_name === name);
+      if (!hero) throw Error("\u0413\u0435\u0440\u043E\u0439 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u0432 OpenDota.");
+      id = hero.id;
+      const names = new Map(heroes.map((x) => [x.id, x.localized_name]));
+      const results = await Promise.allSettled([
+        get(`heroes/${id}/matchups`),
+        get(`heroes/${id}/itemPopularity`),
+        get("constants/items")
+      ]);
+      if (current !== version) return;
+      loading2.remove();
+      const counter = section(
+        body,
+        "\u041A\u043E\u043D\u0442\u0440\u043F\u0438\u043A\u0438: \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u044B \u043F\u0440\u043E\u0442\u0438\u0432 \u0441\u043E\u043F\u0435\u0440\u043D\u0438\u043A\u043E\u0432",
+        "OpenDota \xB7 \u043F\u0440\u043E\u0444\u0435\u0441\u0441\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0435 \u043C\u0430\u0442\u0447\u0438 \u0437\u0430 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0433\u043E\u0434. \u041F\u043E\u043A\u0430\u0437\u0430\u043D \u0432\u0438\u043D\u0440\u0435\u0439\u0442 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u0433\u0435\u0440\u043E\u044F \u043F\u0440\u043E\u0442\u0438\u0432 \u043A\u0430\u0436\u0434\u043E\u0433\u043E \u0441\u043E\u043F\u0435\u0440\u043D\u0438\u043A\u0430, \u043C\u0438\u043D\u0438\u043C\u0443\u043C 30 \u0438\u0433\u0440. \u0412\u044B\u0431\u043E\u0440\u043A\u0430 \u0432\u043A\u043B\u044E\u0447\u0430\u0435\u0442 \u0440\u0430\u0437\u043D\u044B\u0435 \u043F\u0430\u0442\u0447\u0438; \u0444\u0438\u043B\u044C\u0442\u0440\u044B \u0440\u0435\u0439\u0442\u0438\u043D\u0433\u0430 \u0438 \u043F\u043E\u0437\u0438\u0446\u0438\u0438 \u0437\u0434\u0435\u0441\u044C \u043D\u0435 \u043F\u0440\u0438\u043C\u0435\u043D\u044F\u044E\u0442\u0441\u044F."
+      );
+      if (results[0].status === "fulfilled") {
+        const rows = matchups(results[0].value);
+        if (!rows.length)
+          counter.append(
+            el("p", "\u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u043C\u0430\u0442\u0447\u0435\u0439 \u0434\u043B\u044F \u0441\u0440\u0430\u0432\u043D\u0435\u043D\u0438\u044F.", "small-note")
+          );
+        else {
+          for (const [label, list] of [
+            [
+              "\u0421\u043B\u043E\u0436\u043D\u044B\u0435 \u0441\u043E\u043F\u0435\u0440\u043D\u0438\u043A\u0438",
+              rows.filter((x) => x.winrate < 50).sort((a, b) => a.winrate - b.winrate).slice(0, 6)
+            ],
+            [
+              "\u0423\u0434\u043E\u0431\u043D\u044B\u0435 \u0441\u043E\u043F\u0435\u0440\u043D\u0438\u043A\u0438",
+              rows.filter((x) => x.winrate >= 50).sort((a, b) => b.winrate - a.winrate).slice(0, 6)
+            ]
+          ]) {
+            counter.append(el("h4", label));
+            if (!list.length)
+              counter.append(
+                el(
+                  "p",
+                  "\u041D\u0435\u0442 \u0441\u043E\u043F\u0435\u0440\u043D\u0438\u043A\u043E\u0432 \u0441 \u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E\u0439 \u0432\u044B\u0431\u043E\u0440\u043A\u043E\u0439 \u0432 \u044D\u0442\u043E\u0439 \u0433\u0440\u0443\u043F\u043F\u0435.",
+                  "small-note"
+                )
+              );
+            for (const row of list) {
+              const r = el("div", null, "insight-row");
+              const b = el(
+                "button",
+                names.get(row.hero_id) || `\u0413\u0435\u0440\u043E\u0439 ${row.hero_id}`,
+                "hero-link"
+              );
+              b.onclick = () => {
+                open(
+                  names.get(row.hero_id) || `\u0413\u0435\u0440\u043E\u0439 ${row.hero_id}`,
+                  row.hero_id
+                );
+              };
+              r.append(
+                b,
+                el(
+                  "span",
+                  `${row.winrate.toFixed(1)}% \xB7 ${row.games_played} \u0438\u0433\u0440`
+                )
+              );
+              counter.append(r);
+            }
+          }
+        }
+      } else counter.append(el("p", results[0].reason.message, "small-note"));
+      const builds = section(
+        body,
+        "\u041F\u0440\u0435\u0434\u043C\u0435\u0442\u044B \u043F\u043E \u0441\u0442\u0430\u0434\u0438\u044F\u043C \u0438\u0433\u0440\u044B",
+        "OpenDota \xB7 \u0434\u043E 100 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0445 \u0440\u0430\u0437\u043E\u0431\u0440\u0430\u043D\u043D\u044B\u0445 \u043F\u0440\u043E\u0444\u0435\u0441\u0441\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0445 \u043C\u0430\u0442\u0447\u0435\u0439. \u0427\u0438\u0441\u043B\u0430 \u2014 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043F\u043E\u043A\u0443\u043F\u043E\u043A, \u043D\u0435 \u0432\u0438\u043D\u0440\u0435\u0439\u0442 \u043F\u0440\u0435\u0434\u043C\u0435\u0442\u0430. \u041F\u043E\u043F\u0443\u043B\u044F\u0440\u043D\u044B\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B \u043D\u0435 \u043E\u0431\u0440\u0430\u0437\u0443\u044E\u0442 \u0433\u043E\u0442\u043E\u0432\u0443\u044E \u0441\u0431\u043E\u0440\u043A\u0443: \u0432\u044B\u0431\u043E\u0440 \u0437\u0430\u0432\u0438\u0441\u0438\u0442 \u043E\u0442 \u0440\u043E\u043B\u0438 \u0438 \u0441\u043E\u043F\u0435\u0440\u043D\u0438\u043A\u043E\u0432."
+      );
+      if (results[1].status === "fulfilled" && results[2].status === "fulfilled") {
+        for (const [key, label] of [
+          ["start_game_items", "\u0421\u0442\u0430\u0440\u0442"],
+          ["early_game_items", "\u0420\u0430\u043D\u043D\u044F\u044F \u0438\u0433\u0440\u0430 \xB7 \u0434\u043E 10 \u043C\u0438\u043D\u0443\u0442"],
+          ["mid_game_items", "\u0421\u0435\u0440\u0435\u0434\u0438\u043D\u0430 \u0438\u0433\u0440\u044B \xB7 10\u201325 \u043C\u0438\u043D\u0443\u0442"],
+          ["late_game_items", "\u041F\u043E\u0437\u0434\u043D\u044F\u044F \u0438\u0433\u0440\u0430 \xB7 \u043F\u043E\u0441\u043B\u0435 25 \u043C\u0438\u043D\u0443\u0442"]
+        ]) {
+          builds.append(el("h4", label));
+          const list = popularItems(results[1].value[key], results[2].value);
+          if (!list.length) builds.append(el("p", "\u041D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445.", "small-note"));
+          for (const x of list) {
+            const r = el("div", null, "insight-row");
+            r.append(
+              el("span", x.item.dname || x.item.key),
+              el("span", `${x.count} \u043F\u043E\u043A\u0443\u043F\u043E\u043A`)
+            );
+            builds.append(r);
+          }
+        }
+      } else
+        builds.append(
+          el(
+            "p",
+            "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043F\u0440\u0435\u0434\u043C\u0435\u0442\u044B. \u0417\u0430\u043A\u0440\u043E\u0439 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443 \u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u0438 \u043F\u043E\u043F\u044B\u0442\u043A\u0443.",
+            "small-note"
+          )
+        );
+      const recent = section(
+        body,
+        "\u041C\u0430\u0442\u0447\u0438 \u043D\u0430 \u0433\u0435\u0440\u043E\u0435",
+        "\u041F\u0440\u043E\u0444\u0435\u0441\u0441\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0435 \u043C\u0430\u0442\u0447\u0438 \u0438\u0437 \u0432\u044B\u0431\u043E\u0440\u043A\u0438 OpenDota. \u041E\u0442\u043A\u0440\u043E\u0439 \u043C\u0430\u0442\u0447 \u0434\u043B\u044F \u0442\u0430\u0431\u043B\u0438\u0446\u044B \u0438\u0433\u0440\u043E\u043A\u043E\u0432, \u043F\u0440\u0435\u0434\u043C\u0435\u0442\u043E\u0432 \u0438 \u0440\u0430\u0437\u0431\u043E\u0440\u0430."
+      );
+      const button = el("button", "\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0435 \u043C\u0430\u0442\u0447\u0438", "quiet");
+      recent.append(button);
+      button.onclick = async () => {
+        button.disabled = true;
+        try {
+          const rows = await get(`heroes/${id}/matches`);
+          if (current !== version) return;
+          for (const m of rows.slice(0, 10)) {
+            const b = el(
+              "button",
+              `\u041C\u0430\u0442\u0447 ${m.match_id} \xB7 ${new Date(m.start_time * 1e3).toLocaleDateString("ru-RU")}`,
+              "quiet match-shortcut"
+            );
+            b.onclick = () => {
+              dialog.close();
+              window.openMatch(m.match_id);
+            };
+            recent.append(b);
+          }
+          if (!rows.length) recent.append(el("p", "\u041C\u0430\u0442\u0447\u0435\u0439 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442."));
+          button.remove();
+        } catch (e) {
+          button.disabled = false;
+          button.textContent = e.message + " \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C";
+        }
+      };
+    } catch (e) {
+      if (current === version) {
+        loading2.textContent = e.message;
+        if (!loading2.isConnected) body.append(loading2);
+        const retry = el("button", "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C", "quiet");
+        retry.onclick = () => {
+          open(name, id);
+        };
+        body.append(retry);
+      }
+    }
+  }
+  document.getElementById("list").addEventListener("click", (event) => {
+    const b = event.target.closest("[data-hero-name]");
+    if (b) open(b.dataset.heroName, Number(b.dataset.heroId));
+  });
+  window.addEventListener("frostmeta:match", (event) => {
+    const { match, heroes } = event.detail;
+    const target = document.getElementById("matchAnalysis");
+    if (!target) return;
+    target.replaceChildren(el("h3", "\u041A\u0440\u0430\u0442\u043A\u0438\u0439 \u0440\u0430\u0437\u0431\u043E\u0440"));
+    for (const row of matchSummary(match)) {
+      target.append(
+        el(
+          "p",
+          (row.heroId ? `${heroes[row.heroId] || "\u0413\u0435\u0440\u043E\u0439"}: ` : "") + row.text
+        )
+      );
+    }
+    target.append(
+      el(
+        "p",
+        "\u0412\u044B\u0432\u043E\u0434\u044B \u0440\u0430\u0441\u0441\u0447\u0438\u0442\u0430\u043D\u044B \u043F\u043E \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u043C \u0446\u0438\u0444\u0440\u0430\u043C \u043C\u0430\u0442\u0447\u0430. \u041E\u043D\u0438 \u043D\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u044E\u0442 \u043F\u0440\u0438\u0447\u0438\u043D\u044B \u043F\u043E\u0431\u0435\u0434\u044B \u0438\u043B\u0438 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u043E \u0440\u0435\u0448\u0435\u043D\u0438\u0439 \u0438\u0433\u0440\u043E\u043A\u0430.",
+        "small-note"
+      )
+    );
+  });
+}
 
 // node_modules/@capacitor/app/dist/esm/index.js
 init_dist();
 var App = registerPlugin("App", {
-  web: () => Promise.resolve().then(() => (init_web2(), web_exports2)).then((m) => new m.AppWeb())
+  web: () => Promise.resolve().then(() => (init_web(), web_exports)).then((m) => new m.AppWeb())
 });
 
 // src/app.mjs
@@ -592,10 +838,6 @@ var $ = (id) => document.getElementById(id);
 var native = Capacitor.isNativePlatform();
 if (native) document.body.classList.add("native");
 var config = {};
-var user = null;
-var bearer = null;
-var pending = null;
-var googleConfigured = false;
 var toastTimer;
 function toast(message) {
   $("toast").textContent = message;
@@ -611,31 +853,14 @@ function safeUrl(value) {
     return null;
   }
 }
-async function api(path, { method = "GET", body } = {}) {
-  if (native && !config.apiBase)
-    throw Error("\u0421\u0435\u0440\u0432\u0438\u0441 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u0435\u0449\u0451 \u043D\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D");
-  const r = await fetch((config.apiBase || "") + path, {
-    method,
-    credentials: native ? "omit" : "same-origin",
-    headers: {
-      ...body ? { "Content-Type": "application/json" } : {},
-      ...bearer ? { Authorization: `Bearer ${bearer}` } : {}
-    },
-    body: body ? JSON.stringify(body) : void 0,
-    signal: AbortSignal.timeout(2e4)
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw Error(data.error || "\u0421\u0435\u0440\u0432\u0438\u0441 \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D");
-  return { data, status: r.status };
-}
-var el = (tag, text, cls) => {
+var el2 = (tag, text, cls) => {
   const n = document.createElement(tag);
   if (text) n.textContent = text;
   if (cls) n.className = cls;
   return n;
 };
 function action(parent, label, fn, cls = "quiet") {
-  const b = el("button", label, cls);
+  const b = el2("button", label, cls);
   b.onclick = async () => {
     b.disabled = true;
     try {
@@ -649,152 +874,71 @@ function action(parent, label, fn, cls = "quiet") {
   parent.append(b);
   return b;
 }
-async function account() {
+async function me() {
   const box = $("accountPanel");
-  box.replaceChildren();
-  box.append(el("h2", user ? "\u0422\u0432\u043E\u0439 FROSTMETA" : "\u0422\u0432\u043E\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C Dota 2"));
-  if (!user) {
-    box.append(
-      el(
-        "p",
-        "\u0412\u043E\u0439\u0434\u0438 \u0447\u0435\u0440\u0435\u0437 Google \u0438 \u043F\u0440\u0438\u0432\u044F\u0436\u0438 Steam. \u0422\u0432\u043E\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C \u0438 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0435 \u043C\u0430\u0442\u0447\u0438 \u0431\u0443\u0434\u0443\u0442 \u043F\u043E\u0434 \u0440\u0443\u043A\u043E\u0439."
-      )
-    );
-    const b = action(box, "\u0412\u043E\u0439\u0442\u0438 \u0447\u0435\u0440\u0435\u0437 Google", () => login("google"), "btn");
-    b.disabled = !googleConfigured;
-    if (!googleConfigured)
-      box.append(
-        el(
-          "p",
-          "\u0412\u0445\u043E\u0434 \u043F\u043E\u044F\u0432\u0438\u0442\u0441\u044F \u043F\u043E\u0441\u043B\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0441\u0435\u0440\u0432\u0438\u0441\u0430 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438. \u041F\u043E\u0438\u0441\u043A \u0438\u0433\u0440\u043E\u043A\u043E\u0432 \u0438 \u043C\u0430\u0442\u0447\u0435\u0439 \u0443\u0436\u0435 \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u0431\u0435\u0437 \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430.",
-          "small-note"
-        )
-      );
-    return;
-  }
-  box.append(el("p", `${user.name} \xB7 ${user.email}`, "account-email"));
-  const row = el("div", null, "account-actions");
-  box.append(row);
-  if (user.accountId) {
-    box.append(el("p", `Steam \u043F\u0440\u0438\u0432\u044F\u0437\u0430\u043D \xB7 Dota ID ${user.accountId}`));
-    action(
-      row,
-      "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043C\u043E\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C Dota 2",
-      () => {
-        window.view(2);
-        $("pid").value = user.accountId;
-        window.loadPlayer(user.accountId);
-        box.hidden = true;
-      },
-      "btn"
-    );
-    action(row, "\u041E\u0442\u0432\u044F\u0437\u0430\u0442\u044C Steam", async () => {
-      if (!confirm("\u041E\u0442\u0432\u044F\u0437\u0430\u0442\u044C \u043F\u0440\u043E\u0444\u0438\u043B\u044C Steam?")) return;
-      await api("/api/steam", { method: "DELETE" });
-      await me();
-    });
-  } else {
-    box.append(
-      el(
-        "p",
-        "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438 \u0441\u0432\u043E\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C \u043D\u0430 \u043E\u0444\u0438\u0446\u0438\u0430\u043B\u044C\u043D\u043E\u043C \u0441\u0430\u0439\u0442\u0435 Steam. \u041F\u0430\u0440\u043E\u043B\u044C Steam \u0432 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u043D\u0435 \u043F\u0435\u0440\u0435\u0434\u0430\u0451\u0442\u0441\u044F."
-      )
-    );
-    action(row, "\u041F\u0440\u0438\u0432\u044F\u0437\u0430\u0442\u044C Steam", () => login("steam"), "btn");
-  }
-  action(row, "\u0412\u044B\u0439\u0442\u0438", async () => {
-    await api("/api/logout", { method: "POST" });
-    bearer = null;
-    await me();
-  });
-  action(
-    row,
-    "\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0430\u043A\u043A\u0430\u0443\u043D\u0442",
-    async () => {
-      if (!confirm(
-        "\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0430\u043A\u043A\u0430\u0443\u043D\u0442 FROSTMETA \u0438 \u043F\u0440\u0438\u0432\u044F\u0437\u043A\u0443 Steam? \u042D\u0442\u043E \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u043D\u0435\u043E\u0431\u0440\u0430\u0442\u0438\u043C\u043E."
-      ))
-        return;
-      await api("/api/account", { method: "DELETE" });
-      bearer = null;
-      await me();
-    },
-    "quiet danger"
-  );
+  box.replaceChildren(el2("h2", "\u041C\u043E\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C Dota 2"));
   box.append(
-    el(
+    el2(
       "p",
-      "\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u043C\u0430\u0442\u0447\u0435\u0439 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0430, \u0435\u0441\u043B\u0438 \u0432 Dota 2 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u0430 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430 \xAB\u041E\u0431\u0449\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0430\u044F \u0438\u0441\u0442\u043E\u0440\u0438\u044F \u043C\u0430\u0442\u0447\u0435\u0439\xBB.",
+      "\u0421\u043E\u0445\u0440\u0430\u043D\u0438 Dota ID \u0438\u043B\u0438 \u0447\u0438\u0441\u043B\u043E\u0432\u0443\u044E \u0441\u0441\u044B\u043B\u043A\u0443 Steam \u043D\u0430 \u044D\u0442\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435. \u0412\u0445\u043E\u0434 \u0438 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u0435 \u0432\u043B\u0430\u0434\u0435\u043D\u0438\u044F \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u043E\u043C \u043D\u0435 \u0442\u0440\u0435\u0431\u0443\u044E\u0442\u0441\u044F."
+    )
+  );
+  const input = el2("input");
+  input.id = "localDotaId";
+  input.placeholder = "Dota ID \u0438\u043B\u0438 \u0441\u0441\u044B\u043B\u043A\u0430 Steam /profiles/\u2026";
+  input.setAttribute("aria-label", "Dota ID \u0438\u043B\u0438 \u0441\u0441\u044B\u043B\u043A\u0430 Steam");
+  box.append(input);
+  let saved = null;
+  try {
+    saved = localStorage.getItem("frostmeta.dotaId");
+  } catch {
+  }
+  if (saved) input.value = saved;
+  const valid = () => {
+    const id = window.parseId(input.value.trim());
+    if (!id || !/^[1-9]\d*$/.test(id) || BigInt(id) > 4294967295n)
+      throw Error(
+        "\u0412\u0432\u0435\u0434\u0438 Dota ID \u043E\u0442 1 \u0434\u043E 4294967295 \u0438\u043B\u0438 \u0447\u0438\u0441\u043B\u043E\u0432\u0443\u044E \u0441\u0441\u044B\u043B\u043A\u0443 Steam. \u041F\u043E\u0438\u0441\u043A \u043F\u043E \u043D\u0438\u043A\u0443 \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u0432\u043E \u0432\u043A\u043B\u0430\u0434\u043A\u0435 \xAB\u0418\u0433\u0440\u043E\u043A\xBB."
+      );
+    return id;
+  };
+  const actions = el2("div", null, "account-actions");
+  box.append(actions);
+  action(
+    actions,
+    "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043F\u0440\u043E\u0444\u0438\u043B\u044C",
+    async () => {
+      const id = valid();
+      localStorage.setItem("frostmeta.dotaId", id);
+      toast("\u041F\u0440\u043E\u0444\u0438\u043B\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D \u043D\u0430 \u044D\u0442\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435");
+    },
+    "btn"
+  );
+  action(actions, "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0443", async () => {
+    const id = valid();
+    window.view(2);
+    $("pid").value = id;
+    window.loadPlayer(id);
+    box.hidden = true;
+  });
+  action(actions, "\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 ID", async () => {
+    localStorage.removeItem("frostmeta.dotaId");
+    input.value = "";
+    toast("\u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 ID \u0443\u0434\u0430\u043B\u0451\u043D");
+  });
+  box.append(
+    el2(
+      "p",
+      "\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u043C\u0430\u0442\u0447\u0435\u0439 \u0437\u0430\u0432\u0438\u0441\u0438\u0442 \u043E\u0442 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u043F\u0443\u0431\u043B\u0438\u0447\u043D\u043E\u0441\u0442\u0438 \u0432 Dota 2. \u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 ID \u043D\u0435 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u0443\u0435\u0442\u0441\u044F \u043C\u0435\u0436\u0434\u0443 \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0430\u043C\u0438.",
       "small-note"
     )
   );
 }
-async function me() {
-  try {
-    const { data } = await api("/api/me");
-    user = data.user;
-    googleConfigured = data.googleConfigured;
-  } catch {
-    user = null;
-    googleConfigured = false;
-  }
-  $("accountButton").textContent = user ? "\u041C\u043E\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C" : "\u0412\u043E\u0439\u0442\u0438 / \u043C\u043E\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C";
-  await account();
-}
-async function login(kind) {
-  if (native) {
-    const { data } = await api("/api/mobile/launch", {
-      method: "POST",
-      body: { kind }
-    });
-    pending = { ...data, expires: Date.now() + 6e5 };
-    await Browser2.open({ url: data.url });
-    startPoll();
-  } else location.assign((config.apiBase || "") + "/auth/" + kind);
-}
-var polling = false;
-async function poll() {
-  if (!pending || polling) return;
-  polling = true;
-  try {
-    if (Date.now() > pending.expires) {
-      pending = null;
-      toast("\u0412\u0440\u0435\u043C\u044F \u0432\u0445\u043E\u0434\u0430 \u0438\u0441\u0442\u0435\u043A\u043B\u043E. \u041F\u043E\u0432\u0442\u043E\u0440\u0438 \u043F\u043E\u043F\u044B\u0442\u043A\u0443.");
-      return;
-    }
-    const { data, status } = await api("/api/mobile/exchange", {
-      method: "POST",
-      body: { id: pending.id, secret: pending.secret }
-    });
-    if (status !== 202) {
-      bearer = data.token;
-      pending = null;
-      await Browser2.close().catch(() => {
-      });
-      await me();
-      toast("\u041F\u0440\u043E\u0444\u0438\u043B\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0451\u043D");
-    }
-  } catch (e) {
-    pending = null;
-    toast(e.message);
-  } finally {
-    polling = false;
-  }
-}
-function startPoll() {
-  const timer = setInterval(() => {
-    if (!pending) clearInterval(timer);
-    else poll();
-  }, 2e3);
-  poll();
-}
 if (native)
   App.addListener("appStateChange", ({ isActive }) => {
-    if (isActive) {
-      poll();
-      refreshMeta();
-    }
+    if (isActive) refreshMeta();
   });
+initInsights();
 $("accountButton").onclick = () => {
   $("accountPanel").hidden = !$("accountPanel").hidden;
 };
@@ -809,10 +953,10 @@ function stores() {
   ]) {
     const url = safeUrl(config[key]);
     if (key === "androidApkUrl" && !url) continue;
-    const item = el(url ? "a" : "div", null, "store");
+    const item = el2(url ? "a" : "div", null, "store");
     item.append(
-      el("b", label),
-      el("span", url ? "\u0421\u043A\u0430\u0447\u0430\u0442\u044C \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435" : waiting)
+      el2("b", label),
+      el2("span", url ? "\u0421\u043A\u0430\u0447\u0430\u0442\u044C \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435" : waiting)
     );
     if (url) {
       item.href = url;
@@ -838,7 +982,7 @@ async function checkMetaHealth() {
     if (status.ok === false) {
       $("metaStatus").classList.add("stale");
       $("metaStatus").querySelector("span").replaceChildren(
-        el("strong", "\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043D\u0435 \u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0435\u0442\u0441\u044F"),
+        el2("strong", "\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043D\u0435 \u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0435\u0442\u0441\u044F"),
         document.createTextNode(
           " \xB7 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u044F\u044F \u043F\u043E\u043F\u044B\u0442\u043A\u0430 " + date(status.checkedAt)
         )
@@ -877,7 +1021,7 @@ async function refreshMeta() {
     state.classList.toggle("stale", Boolean(stale));
     const span = state.querySelector("span");
     span.replaceChildren(
-      el(
+      el2(
         "strong",
         offline ? "\u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u0430\u044F \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430 \xB7 \u043D\u0435\u0442 \u0441\u0432\u044F\u0437\u0438" : j.demo ? "\u0414\u0435\u043C\u043E-\u0434\u0430\u043D\u043D\u044B\u0435" : stale ? "\u0414\u0430\u043D\u043D\u044B\u0435 \u0442\u0440\u0435\u0431\u0443\u044E\u0442 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F" : "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u0430"
       ),
@@ -890,7 +1034,7 @@ async function refreshMeta() {
     $("metaStatus").querySelector("span").textContent = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F. \u041F\u0440\u043E\u0432\u0435\u0440\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435.";
     if (!$("list").children.length)
       $("list").append(
-        el(
+        el2(
           "div",
           "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0443. \u041D\u0430\u0436\u043C\u0438 \xAB\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C\xBB, \u0447\u0442\u043E\u0431\u044B \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C.",
           "empty"
@@ -907,9 +1051,6 @@ try {
   config = await r.json();
   if (config.apiBase) config.apiBase = config.apiBase.replace(/\/$/, "");
 } catch {
-}
-if (native && !config.apiBase) {
-  googleConfigured = false;
 }
 stores();
 await Promise.all([me(), refreshMeta()]);
