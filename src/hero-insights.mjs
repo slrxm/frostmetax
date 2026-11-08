@@ -1,20 +1,6 @@
 import { matchups, popularItems, matchSummary } from "./hero-data.mjs";
-const API = "https://api.opendota.com/api/";
-const cache = new Map();
-async function get(path) {
-  const hit = cache.get(path);
-  if (hit && Date.now() - hit.at < 600000) return hit.value;
-  const r = await fetch(API + path, { signal: AbortSignal.timeout(15000) });
-  if (!r.ok)
-    throw Error(
-      r.status === 429
-        ? "OpenDota ограничил запросы. Попробуй через минуту."
-        : "OpenDota временно недоступен.",
-    );
-  const value = await r.json();
-  cache.set(path, { value, at: Date.now() });
-  return value;
-}
+import { createJSONClient } from "./request-json.mjs";
+const get = createJSONClient({ baseUrl: "https://api.opendota.com/api/" });
 const el = (tag, text, cls) => {
   const n = document.createElement(tag);
   if (text != null) n.textContent = text;
@@ -205,7 +191,7 @@ export function initInsights() {
     } catch (e) {
       if (current === version) {
         loading.textContent = e.message;
-        if(!loading.isConnected)body.append(loading);
+        if (!loading.isConnected) body.append(loading);
         const retry = el("button", "Повторить", "quiet");
         retry.onclick = () => {
           open(name, id);

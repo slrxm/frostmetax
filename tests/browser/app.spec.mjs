@@ -136,3 +136,19 @@ test("failed matchup requests do not hide available item statistics", async ({
   await expect(page.locator("#heroBody")).toContainText("ограничил запросы");
   await expect(page.locator("#heroBody")).toContainText("Phase Boots");
 });
+test('player, comparison and match analysis remain functional',async({page})=>{
+ await page.route('https://api.opendota.com/api/**',r=>{
+ const path=new URL(r.request().url()).pathname.replace('/api/','');
+ let data={};
+ if(path==='heroes')data=[{id:2,localized_name:'Axe',name:'npc_dota_hero_axe'}];
+ else if(path.startsWith('players/')){
+  const [,id,part]=path.split('/');
+  data=!part?{profile:{personaname:id==='123'?'Alpha':'Beta'},rank_tier:50}:part==='wl'?{win:6,lose:4}:part==='heroes'?[{hero_id:2,games:10,win:6}]:[];
+ }else if(path.startsWith('matches/'))data={match_id:900001,radiant_win:true,radiant_score:20,dire_score:10,duration:1800,start_time:1700000000,game_mode:1,radiant_gold_adv:[-6000,-5000,1000],radiant_xp_adv:[0,100,500],players:[{hero_id:2,player_slot:0,kills:10,deaths:2,assists:5,gold_per_min:600},{hero_id:2,player_slot:128,kills:2,deaths:10,assists:1,gold_per_min:300}]};
+ return r.fulfill({json:data});
+ });
+ await page.goto('/');await page.locator('#nv2').click();await page.locator('#pid').fill('123');await page.locator('#pid').press('Enter');await expect(page.locator('#pres')).toContainText('Alpha');await expect(page.locator('#pres')).toContainText('60.0%');
+ await page.locator('#nv3').click();await page.locator('#ca').fill('123');await page.locator('#cb').fill('456');await page.locator('#cb').press('Enter');await expect(page.locator('#cres')).toContainText('Alpha');await expect(page.locator('#cres')).toContainText('Beta');
+ await page.locator('#nv1').click();await page.locator('#mid').fill('900001');await page.locator('#mid').press('Enter');await expect(page.locator('#matchAnalysis')).toContainText('600 GPM');await expect(page.locator('#matchAnalysis')).toContainText('отыграл');await expect(page.locator('#chartbox svg')).toBeVisible();
+});
+test('Dota IDs validate platform and numeric range',async({page})=>{await page.goto('/');const ids=await page.evaluate(()=>['123','76561198083722517','https://steamcommunity.com/profiles/76561198083722517','https://www.dotabuff.com/players/123','0','4294967296','https://evil.test/players/123'].map(x=>window.parseId(x)));expect(ids).toEqual(['123','123456789','123456789','123',null,null,null]);});
